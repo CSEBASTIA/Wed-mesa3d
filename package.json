@@ -1,0 +1,9 @@
+{
+  "name": "wed-mesa3d",
+  "version": "0.3.0",
+  "description": "Editor 3D para diseñar escritorios a medida y exportar el plano para el carpintero.",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  }
+}

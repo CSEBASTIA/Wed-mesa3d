@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Taller de Escritorios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="bar">
+  <h1 class="brand"><span></span>Taller de Escritorios</h1>
+  <div class="tools">
+    <button class="btn primary" id="b-tpl">Escritorio a medida</button>
+    <button class="btn primary" id="b-export">Exportar plano</button>
+    <span class="sep"></span>
+    <button class="btn" id="b-undo" title="Ctrl+Z">Deshacer</button>
+    <button class="btn" id="b-redo" title="Ctrl+Y">Rehacer</button>
+    <span class="sep"></span>
+    <button class="btn" id="b-vert" aria-pressed="false" title="Al arrastrar, la pieza sube y baja (o mantén Shift)">Mover en altura</button>
+    <button class="btn" id="b-snap" aria-pressed="true" title="Las piezas se pegan a las caras de las demás">Imán</button>
+    <span class="sep"></span>
+    <button class="btn" id="b-iso">Vista 3D</button>
+    <button class="btn" id="b-front">Frente</button>
+    <button class="btn" id="b-top">Arriba</button>
+    <span class="sep"></span>
+    <button class="btn danger" id="b-clear">Vaciar</button>
+  </div>
+</header>
+
+<div class="work">
+  <aside class="catalog">
+    <h2>Agregar pieza</h2>
+    <div class="pieces" id="catalog"></div>
+  </aside>
+
+  <main class="stage">
+    <div id="view"></div>
+    <div class="toast" id="toast" hidden></div>
+    <div class="hud">
+      <div class="hint">Arrastra una pieza para moverla. Arrastra el fondo para girar la vista, la rueda acerca y aleja. Medidas en centímetros.</div>
+      <div class="badge" id="badge" hidden></div>
+    </div>
+  </main>
+
+  <aside class="side">
+    <section>
+      <h2>Pieza seleccionada</h2>
+      <p class="empty" id="empty">Toca una pieza en la escena o en la lista para cambiar sus medidas, su posición y su material.</p>
+      <div class="form" id="form" hidden>
+        <div class="field"><label for="f-name">Nombre</label><input id="f-name" type="text" maxlength="40"></div>
+        <p class="sub">Medidas (cm)</p>
+        <div class="row3">
+          <div class="field"><label for="f-w" id="l-w">Ancho</label><input id="f-w" type="number" min="0.5" step="0.5"></div>
+          <div class="field"><label for="f-h" id="l-h">Alto</label><input id="f-h" type="number" min="0.5" step="0.5"></div>
+          <div class="field" id="wrap-d"><label for="f-d" id="l-d">Fondo</label><input id="f-d" type="number" min="0.5" step="0.5"></div>
+        </div>
+        <div class="row2" id="extra" hidden>
+          <div class="field"><label for="f-e1" id="l-e1"></label><input id="f-e1" type="number" step="0.5"></div>
+          <div class="field"><label for="f-e2" id="l-e2"></label><input id="f-e2" type="number" step="0.5"></div>
+        </div>
+        <p class="sub">Posición (cm)</p>
+        <div class="row3">
+          <div class="field"><label for="f-x">Izq. / der.</label><input id="f-x" type="number" step="0.5"></div>
+          <div class="field"><label for="f-y">Altura del piso</label><input id="f-y" type="number" min="0" step="0.5"></div>
+          <div class="field"><label for="f-z">Atrás / frente</label><input id="f-z" type="number" step="0.5"></div>
+        </div>
+        <p class="sub">Material</p>
+        <div class="swatches" id="swatches"></div>
+        <div class="actions">
+          <button class="btn" id="a-rot" title="R">Girar 90°</button>
+          <button class="btn" id="a-drop" title="Baja la pieza hasta el piso o la pieza que tenga debajo">Apoyar</button>
+          <button class="btn" id="a-dup" title="Ctrl+D">Duplicar</button>
+          <button class="btn danger" id="a-del" title="Supr">Eliminar</button>
+        </div>
+        <button class="btn wide" id="a-open" hidden>Abrir cajón</button>
+        <button class="btn wide" id="a-flip" hidden>Cambiar esquina de lado</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Lista de cortes</h2>
+      <table class="cuts">
+        <thead><tr><th>Pieza</th><th>Ancho × alto × fondo</th></tr></thead>
+        <tbody id="cuts"></tbody>
+      </table>
+      <p class="total" id="total"></p>
+    </section>
+  </aside>
+</div>
+
+<!-- Escritorio a medida -->
+<div class="modal" id="m-tpl" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tpl-title">
+    <h3 id="tpl-title">Escritorio a medida</h3>
+    <p class="lead">Escribe las medidas y se arma el escritorio completo con tablero, soportes, faldones y cajonera. Después puedes mover o cambiar cualquier pieza.</p>
+    <div>
+      <p class="sub" style="margin-bottom:6px">Modelos de partida</p>
+      <div class="presets" id="presets"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label for="t-shape">Forma</label>
+        <select id="t-shape"><option value="L">En L (esquinero)</option><option value="recto">Recto</option></select></div>
+      <div class="field" id="w-corner"><label for="t-corner">Esquina hacia</label>
+        <select id="t-corner"><option value="izq">Izquierda</option><option value="der">Derecha</option></select></div>
+    </div>
+    <p class="sub">Medidas (cm)</p>
+    <div class="row3 tpl">
+      <div class="field"><label for="t-a" id="tl-a">a · Largo trasero</label><input id="t-a" type="number" min="40" max="400" step="1"></div>
+      <div class="field" id="w-b"><label for="t-b">b · Largo lateral</label><input id="t-b" type="number" min="40" max="400" step="1"></div>
+      <div class="field"><label for="t-c">c · Fondo</label><input id="t-c" type="number" min="30" max="120" step="1"></div>
+      <div class="field"><label for="t-d">d · Altura total</label><input id="t-d" type="number" min="40" max="120" step="0.5"></div>
+      <div class="field"><label for="t-t">Grosor tablero</label><input id="t-t" type="number" min="1" max="6" step="0.1"></div>
+      <div class="field" id="w-r"><label for="t-r">Radio de la curva</label><input id="t-r" type="number" min="0" max="80" step="1"></div>
+    </div>
+    <div class="row3 tpl">
+      <div class="field"><label for="t-caj">Cajonera</label><select id="t-caj"></select></div>
+      <div class="field"><label for="t-n">Cajones</label><input id="t-n" type="number" min="1" max="6" step="1"></div>
+      <div class="field"><label for="t-mt">Material tablero</label><select id="t-mt"></select></div>
+      <div class="field"><label for="t-ms">Material estructura</label><select id="t-ms"></select></div>
+    </div>
+    <label class="check"><input type="checkbox" id="t-room"> Mostrar las paredes de la habitación</label>
+    <div class="row2" id="w-room">
+      <div class="field"><label for="t-rw">Pared trasera (cm)</label><input id="t-rw" type="number" min="60" max="1000" step="1"></div>
+      <div class="field"><label for="t-rd">Pared lateral (cm)</label><input id="t-rd" type="number" min="60" max="1000" step="1"></div>
+    </div>
+    <div class="foot">
+      <button class="btn" id="t-cancel">Cancelar</button>
+      <button class="btn primary" id="t-go">Crear escritorio</button>
+    </div>
+  </div>
+</div>
+
+<!-- Exportar plano -->
+<div class="modal" id="m-exp" hidden>
+  <div class="sheet big" role="dialog" aria-modal="true" aria-labelledby="exp-title">
+    <h3 id="exp-title">Plano para el carpintero</h3>
+    <div class="exp-grid">
+      <div class="form">
+        <div class="field"><label for="e-name">Nombre del proyecto</label><input id="e-name" type="text" maxlength="60"></div>
+        <div class="field"><label for="e-client">Cliente o lugar</label><input id="e-client" type="text" maxlength="60"></div>
+        <div class="field"><label for="e-notes">Notas para el carpintero</label><textarea id="e-notes" maxlength="400" placeholder="Ej.: canto PVC 2 mm en todo el borde visible, correderas telescópicas."></textarea></div>
+        <label class="check"><input type="checkbox" id="e-chair" checked> Dibujar la silla en la vista superior</label>
+        <button class="btn primary wide" id="e-jpg">Descargar JPG</button>
+        <button class="btn wide" id="e-png">Descargar PNG</button>
+        <p class="note">Si la descarga no empieza, haz clic derecho sobre la imagen y elige "Guardar imagen como".</p>
+        <button class="btn wide" id="e-close">Cerrar</button>
+      </div>
+      <div class="preview"><img id="e-img" alt="Plano del escritorio con medidas"></div>
+    </div>
+  </div>
+</div>
+
+<!-- three.js (global THREE) y controles de órbita -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
