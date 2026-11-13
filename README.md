@@ -68,6 +68,9 @@ lo guarda en `localStorage`, apila el historial y emite eventos tipados (`reset`
 ## Controles
 
 - Arrastra una pieza para moverla; con Shift (o "Mover en altura") sube y baja.
-- Arrastra el fondo para girar la vista; la rueda acerca y aleja.
+- Arrastra el fondo para girar la vista; la rueda acerca y aleja; clic derecho desplaza.
+- **Cámara con teclado:** W adelante · S atrás · A izquierda · D derecha · Q bajar · E subir · Shift más rápido.
+  Las teclas van por posición física, así que funcionan igual en otros teclados (por ejemplo AZERTY).
+- Botón **Cámara**: velocidad del teclado y sensibilidad del giro y del zoom (se guardan en el navegador).
 - Doble clic en un cajón para abrirlo o cerrarlo.
 - Flechas: mover · R: girar · Supr: eliminar · Ctrl+Z / Ctrl+Y: deshacer / rehacer.

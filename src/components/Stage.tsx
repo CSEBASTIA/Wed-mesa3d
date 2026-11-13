@@ -20,6 +20,7 @@ export function Stage({ onReady }: { onReady: (vp: Viewport | null) => void }) {
     if (!initialized) { initialized = true; store.init(); }
     vp.setView('iso');
     onReady(vp);
+    if (import.meta.env.DEV) Object.assign(window, { tallerVp: vp });
     return () => { detach(); vp.destroy(); onReady(null); };
   }, [onReady]);
 
@@ -28,7 +29,7 @@ export function Stage({ onReady }: { onReady: (vp: Viewport | null) => void }) {
       <div id="view" ref={host} />
       {msg && <div className="toast">{msg}</div>}
       <div className="hud">
-        <div className="hint">Arrastra una pieza para moverla. Arrastra el fondo para girar la vista, la rueda acerca y aleja. Medidas en centímetros.</div>
+        <div className="hint">Arrastra una pieza para moverla. Arrastra el fondo para girar, la rueda acerca y aleja. WASD mueve la cámara, Q y E bajan y suben. Medidas en centímetros.</div>
         {sel && <div className="badge">{pieceLabel(sel)} cm</div>}
       </div>
     </main>

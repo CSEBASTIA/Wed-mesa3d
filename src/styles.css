@@ -171,5 +171,16 @@ h2 { font-family: var(--font-display); font-size: 12px; font-weight: 600; letter
   .row3.tpl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* ---------- cámara ---------- */
+.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.key { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+kbd {
+  min-width: 30px; padding: 3px 7px; text-align: center; font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 5px;
+}
+.slider-label { display: flex; justify-content: space-between; gap: 8px; }
+.slider-label b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.slider { width: 100%; accent-color: var(--accent); }
+
 /* contenedor de React: ocupa toda la pantalla como columna */
 #root { flex: 1; min-height: 0; display: flex; flex-direction: column; }

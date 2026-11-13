@@ -2,7 +2,9 @@
 // Toda modificación del modelo pasa por aquí; la vista 3D y React solo escuchan.
 import { DEFAULT_CFG, genTemplate } from './templates';
 import { clone } from './format';
-import type { DeskConfig, Piece, Project, Room } from './types';
+import type { CameraSettings, DeskConfig, Piece, Project, Room } from './types';
+
+export const DEFAULT_CAMERA: CameraSettings = { move: 120, rotate: 1, zoom: 1 };
 
 const KEY = 'taller-escritorios-v2';
 const OLD_KEY = 'taller-escritorios-v1';
@@ -27,7 +29,13 @@ export interface StoreEvents {
 type EventName = keyof StoreEvents;
 type Listener<E extends EventName> = (data: StoreEvents[E]) => void;
 
-interface Saved { pieces: Piece[]; room?: Room | null; cfg?: Partial<DeskConfig>; proj?: Partial<Project> }
+interface Saved {
+  pieces: Piece[];
+  room?: Room | null;
+  cfg?: Partial<DeskConfig>;
+  proj?: Partial<Project>;
+  cam?: Partial<CameraSettings>;
+}
 
 function readSaved(): Saved | null {
   try {
@@ -54,6 +62,7 @@ export class Store {
   proj: Project = { name: 'Escritorio en L', client: '', notes: '', chair: true };
   snapOn = true;
   vertOn = false;
+  cam: CameraSettings = { ...DEFAULT_CAMERA };
 
   /** Aumenta con cada evento: React lo usa para saber cuándo volver a dibujar. */
   version = 0;
@@ -98,6 +107,7 @@ export class Store {
       this.room = saved.room ?? null;
       if (saved.cfg) Object.assign(this.cfg, saved.cfg);
       if (saved.proj) Object.assign(this.proj, saved.proj);
+      if (saved.cam) Object.assign(this.cam, saved.cam);
       for (const p of this.pieces) {
         const n = parseInt(String(p.id).slice(1), 10);
         if (n >= this.nextId) this.nextId = n + 1;
@@ -110,7 +120,8 @@ export class Store {
   }
   save(): void {
     try {
-      localStorage.setItem(KEY, JSON.stringify({ pieces: this.pieces, room: this.room, cfg: this.cfg, proj: this.proj }));
+      const data: Saved = { pieces: this.pieces, room: this.room, cfg: this.cfg, proj: this.proj, cam: this.cam };
+      localStorage.setItem(KEY, JSON.stringify(data));
     } catch { /* sin almacenamiento: el diseño vive solo en esta pestaña */ }
   }
   commit(): void {
@@ -159,6 +170,7 @@ export class Store {
   setProj(patch: Partial<Project>): void { Object.assign(this.proj, patch); this.save(); this.emit('options'); }
   setCfg(cfg: DeskConfig): void { this.cfg = cfg; this.save(); }
   toggle(key: 'snapOn' | 'vertOn'): void { this[key] = !this[key]; this.emit('options'); }
+  setCam(patch: Partial<CameraSettings>): void { Object.assign(this.cam, patch); this.save(); this.emit('options'); }
 }
 
 export const store = new Store();

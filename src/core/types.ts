@@ -74,6 +74,16 @@ export interface DeskConfig {
   rd: number;
 }
 
+/** Sensibilidad de la cámara. */
+export interface CameraSettings {
+  /** Velocidad con WASD, en cm por segundo. */
+  move: number;
+  /** Multiplicador del giro con el mouse. */
+  rotate: number;
+  /** Multiplicador del zoom con la rueda. */
+  zoom: number;
+}
+
 export interface Project {
   name: string;
   client: string;

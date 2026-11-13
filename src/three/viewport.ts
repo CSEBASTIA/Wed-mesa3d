@@ -10,6 +10,11 @@ import { edgeMat, wallMat } from './materials';
 
 export type ViewKind = 'iso' | 'front' | 'top';
 
+/** Teclas de movimiento de cámara (por posición física, así funciona igual en teclados QWERTY o AZERTY). */
+export const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight'] as const;
+export type MoveKey = typeof MOVE_KEYS[number];
+const FAST = 2.5;
+
 export interface ProjectedDim { k: string; v: number; txt: string; a: Vec2; b: Vec2; ao: Vec2; bo: Vec2 }
 export interface Snapshot { img: HTMLCanvasElement; dims: ProjectedDim[] }
 export interface PickHit { id: string; point: THREE.Vector3 }
@@ -31,6 +36,8 @@ export class Viewport {
   private grid: THREE.GridHelper | null = null;
   private groups = new Map<string, THREE.Group>();
   private frame = 0;
+  private lastTime = performance.now();
+  private keys = new Set<MoveKey>();
   private cleanups: (() => void)[] = [];
 
   constructor(private readonly host: HTMLElement, private readonly store: Store) {
@@ -76,7 +83,8 @@ export class Viewport {
   private listen(): void {
     const s = this.store;
     this.cleanups.push(
-      s.on('reset', () => { this.syncAll(); this.buildWalls(); this.refreshOutline(); }),
+      s.on('reset', () => { this.syncAll(); this.buildWalls(); this.refreshOutline(); this.applyCamera(); }),
+      s.on('options', () => this.applyCamera()),
       s.on('added', (p) => { this.syncPiece(p); this.refreshOutline(); }),
       s.on('rebuilt', (p) => { this.syncPiece(p); this.refreshOutline(); }),
       s.on('moved', (p) => { const g = this.groups.get(p.id); if (g) this.place(g, p); this.refreshOutline(); }),
@@ -155,6 +163,45 @@ export class Viewport {
   }
 
   /* ---------- cámara ---------- */
+  /** Aplica la sensibilidad guardada al giro, zoom y desplazamiento con el mouse. */
+  private applyCamera(): void {
+    const { rotate, zoom } = this.store.cam;
+    this.controls.rotateSpeed = rotate;
+    this.controls.zoomSpeed = zoom;
+    this.controls.panSpeed = rotate;
+  }
+
+  /** Marca una tecla de movimiento como pulsada o suelta. */
+  setKey(code: MoveKey, down: boolean): void {
+    if (down) this.keys.add(code); else this.keys.delete(code);
+  }
+  releaseKeys(): void { this.keys.clear(); }
+
+  /** Mueve cámara y punto de mira juntos, en el plano del piso, según las teclas pulsadas. */
+  private moveWithKeys(dt: number): void {
+    const k = this.keys;
+    const fwd = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
+    const side = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+    const up = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
+    if (!fwd && !side && !up) return;
+
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    dir.y = 0;
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1); // vista desde arriba: "adelante" es hacia el fondo
+    dir.normalize();
+    const right = new THREE.Vector3().crossVectors(dir, this.camera.up).normalize();
+
+    const fast = k.has('ShiftLeft') || k.has('ShiftRight') ? FAST : 1;
+    const step = this.store.cam.move * fast * dt;
+    const delta = dir.multiplyScalar(fwd * step).add(right.multiplyScalar(side * step));
+    delta.y = up * step;
+    // no dejar que el punto de mira baje del piso
+    if (this.controls.target.y + delta.y < 0) delta.y = -this.controls.target.y;
+    this.camera.position.add(delta);
+    this.controls.target.add(delta);
+  }
+
   setView(kind: ViewKind): void {
     const s = sceneInfo(this.store.pieces), c = V(s.center), k = s.r * 2.1, sd = cornerSide(this.store.pieces);
     const dir = kind === 'front' ? new THREE.Vector3(0, 0.05, 1)
@@ -222,6 +269,9 @@ export class Viewport {
   /* ---------- dibujo ---------- */
   private loop = (): void => {
     this.frame = requestAnimationFrame(this.loop);
+    const now = performance.now(), dt = Math.min(0.05, (now - this.lastTime) / 1000);
+    this.lastTime = now;
+    this.moveWithKeys(dt);
     this.groups.forEach((g) => {
       const s = g.userData.slide as THREE.Group | undefined;
       const open = s?.userData.open as number | undefined;

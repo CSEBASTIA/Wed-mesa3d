@@ -11,8 +11,10 @@ import { Inspector } from './components/Inspector';
 import { CutlistPanel } from './components/CutlistPanel';
 import { TemplateDialog } from './components/TemplateDialog';
 import { ExportDialog } from './components/ExportDialog';
+import { CameraDialog } from './components/CameraDialog';
+import { useCameraKeys } from './app/useCameraKeys';
 
-type Dialog = 'template' | 'export' | null;
+type Dialog = 'template' | 'export' | 'camera' | null;
 
 export function App() {
   const [viewport, setViewport] = useState<Viewport | null>(null);
@@ -20,6 +22,8 @@ export function App() {
   const close = useCallback(() => setDialog(null), []);
   const onReady = useCallback((vp: Viewport | null) => setViewport(vp), []);
   useShortcuts(dialog === null);
+  // con la ventana de cámara abierta se puede probar el movimiento mientras se ajusta
+  useCameraKeys(viewport, dialog === null || dialog === 'camera');
 
   const openExport = () => {
     if (!store.pieces.length) { toast('Agrega piezas o crea un escritorio a medida antes de exportar.'); return; }
@@ -28,7 +32,8 @@ export function App() {
 
   return (
     <>
-      <Toolbar viewport={viewport} onOpenTemplate={() => setDialog('template')} onOpenExport={openExport} />
+      <Toolbar viewport={viewport} onOpenTemplate={() => setDialog('template')} onOpenExport={openExport}
+        onOpenCamera={() => setDialog('camera')} />
       <div className="work">
         <CatalogPanel />
         <Stage onReady={onReady} />
@@ -39,6 +44,7 @@ export function App() {
       </div>
       {dialog === 'template' && <TemplateDialog viewport={viewport} onClose={close} />}
       {dialog === 'export' && viewport && <ExportDialog viewport={viewport} onClose={close} />}
+      {dialog === 'camera' && <CameraDialog onClose={close} />}
     </>
   );
 }

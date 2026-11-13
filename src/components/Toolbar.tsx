@@ -7,9 +7,10 @@ interface ToolbarProps {
   viewport: Viewport | null;
   onOpenTemplate: () => void;
   onOpenExport: () => void;
+  onOpenCamera: () => void;
 }
 
-export function Toolbar({ viewport, onOpenTemplate, onOpenExport }: ToolbarProps) {
+export function Toolbar({ viewport, onOpenTemplate, onOpenExport, onOpenCamera }: ToolbarProps) {
   useStoreVersion();
   const clear = () => {
     if (!store.pieces.length) return;
@@ -34,6 +35,7 @@ export function Toolbar({ viewport, onOpenTemplate, onOpenExport }: ToolbarProps
         <button className="btn" onClick={() => viewport?.setView('iso')}>Vista 3D</button>
         <button className="btn" onClick={() => viewport?.setView('front')}>Frente</button>
         <button className="btn" onClick={() => viewport?.setView('top')}>Arriba</button>
+        <button className="btn" title="Teclas WASD y sensibilidad" onClick={onOpenCamera}>Cámara</button>
         <span className="sep" />
         <button className="btn danger" onClick={clear}>Vaciar</button>
       </div>
