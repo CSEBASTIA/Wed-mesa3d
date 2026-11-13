@@ -7,6 +7,8 @@ import { store } from '../app/context';
 import { toast } from '../app/toast';
 import type { Viewport } from '../three/viewport';
 import { Modal } from './Modal';
+import { Switch } from './fields';
+import { Icon } from './Icon';
 
 type ImageType = 'image/jpeg' | 'image/png';
 
@@ -14,6 +16,7 @@ export function ExportDialog({ viewport, onClose }: { viewport: Viewport; onClos
   const [proj, setProj] = useState<Project>(() => ({ ...store.proj }));
   const [src, setSrc] = useState<string | null>(null);
   const sheet = useRef<HTMLCanvasElement | null>(null);
+  const first = useRef(true);
 
   // Regenera la lámina al abrir y cuando cambian los datos del proyecto (con una pequeña espera al escribir).
   useEffect(() => {
@@ -24,10 +27,9 @@ export function ExportDialog({ viewport, onClose }: { viewport: Viewport; onClos
         sheet.current = makeSheet(store, viewport);
         setSrc(sheet.current.toDataURL('image/jpeg', 0.9));
       });
-    }, src ? 300 : 0);
+    }, first.current ? 0 : 300);
+    first.current = false;
     return () => { cancelled = true; window.clearTimeout(t); };
-    // src solo decide la espera; no debe volver a disparar el efecto
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proj, viewport]);
 
   const edit = (patch: Partial<Project>) => { store.setProj(patch); setProj((p) => ({ ...p, ...patch })); };
@@ -46,32 +48,34 @@ export function ExportDialog({ viewport, onClose }: { viewport: Viewport; onClos
   };
 
   return (
-    <Modal title="Plano para el carpintero" onClose={onClose} wide>
+    <Modal title="Plano para el carpintero" wide onClose={onClose}
+      subtitle="Vista 3D con cotas, vista superior a escala y despiece completo, en una sola imagen."
+      footer={<>
+        <button className="btn ghost" onClick={onClose}>Cerrar</button>
+        <button className="btn" onClick={() => download('image/png')} disabled={!src}>PNG</button>
+        <button className="btn primary" onClick={() => download('image/jpeg')} disabled={!src}><Icon name="download" size={16} />Descargar JPG</button>
+      </>}>
       <div className="exp-grid">
         <div className="form">
           <div className="field">
             <label htmlFor="e-name">Nombre del proyecto</label>
-            <input id="e-name" type="text" maxLength={60} value={proj.name} onChange={(e) => edit({ name: e.target.value })} />
+            <div className="input"><input id="e-name" type="text" maxLength={60} value={proj.name} onChange={(e) => edit({ name: e.target.value })} /></div>
           </div>
           <div className="field">
             <label htmlFor="e-client">Cliente o lugar</label>
-            <input id="e-client" type="text" maxLength={60} value={proj.client} onChange={(e) => edit({ client: e.target.value })} />
+            <div className="input"><input id="e-client" type="text" maxLength={60} value={proj.client} placeholder="Opcional" onChange={(e) => edit({ client: e.target.value })} /></div>
           </div>
           <div className="field">
             <label htmlFor="e-notes">Notas para el carpintero</label>
-            <textarea id="e-notes" maxLength={400} value={proj.notes} onChange={(e) => edit({ notes: e.target.value })}
+            <textarea id="e-notes" className="textarea" maxLength={400} value={proj.notes} onChange={(e) => edit({ notes: e.target.value })}
               placeholder="Ej.: canto PVC 2 mm en todo el borde visible, correderas telescópicas." />
           </div>
-          <label className="check">
-            <input type="checkbox" id="e-chair" checked={proj.chair} onChange={(e) => edit({ chair: e.target.checked })} />
-            Dibujar la silla en la vista superior
-          </label>
-          <button className="btn primary wide" onClick={() => download('image/jpeg')} disabled={!src}>Descargar JPG</button>
-          <button className="btn wide" onClick={() => download('image/png')} disabled={!src}>Descargar PNG</button>
+          <Switch id="e-chair" label="Dibujar la silla en la vista superior" checked={proj.chair} onChange={(v) => edit({ chair: v })} />
           <p className="note">Si la descarga no empieza, haz clic derecho sobre la imagen y elige "Guardar imagen como".</p>
-          <button className="btn wide" onClick={onClose}>Cerrar</button>
         </div>
-        <div className="preview">{src && <img id="e-img" src={src} alt="Plano del escritorio con medidas" />}</div>
+        <div className="preview">
+          {src ? <img id="e-img" src={src} alt="Plano del escritorio con medidas" /> : <span className="loading">Preparando el plano…</span>}
+        </div>
       </div>
     </Modal>
   );

@@ -1,9 +1,8 @@
-// Escena 3D central: monta el Viewport de three.js y conecta el arrastre.
+// Escena 3D a pantalla completa: monta el Viewport de three.js y conecta el arrastre.
 import { useEffect, useRef } from 'react';
 import { Viewport } from '../three/viewport';
 import { attachInteraction } from '../three/interaction';
-import { pieceLabel } from '../core/cutlist';
-import { store, useStoreVersion } from '../app/context';
+import { store } from '../app/context';
 import { useToast } from '../app/toast';
 
 let initialized = false;
@@ -11,8 +10,6 @@ let initialized = false;
 export function Stage({ onReady }: { onReady: (vp: Viewport | null) => void }) {
   const host = useRef<HTMLDivElement>(null);
   const msg = useToast();
-  useStoreVersion();
-  const sel = store.selected();
 
   useEffect(() => {
     const vp = new Viewport(host.current!, store);
@@ -25,13 +22,9 @@ export function Stage({ onReady }: { onReady: (vp: Viewport | null) => void }) {
   }, [onReady]);
 
   return (
-    <main className="stage">
+    <main className="stage" aria-label="Escena 3D. Arrastra piezas para moverlas, el fondo para girar y usa WASD para mover la cámara.">
       <div id="view" ref={host} />
-      {msg && <div className="toast">{msg}</div>}
-      <div className="hud">
-        <div className="hint">Arrastra una pieza para moverla. Arrastra el fondo para girar, la rueda acerca y aleja. WASD mueve la cámara, Q y E bajan y suben. Medidas en centímetros.</div>
-        {sel && <div className="badge">{pieceLabel(sel)} cm</div>}
-      </div>
+      {msg && <div className="toast" role="status">{msg}</div>}
     </main>
   );
 }

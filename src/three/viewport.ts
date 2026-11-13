@@ -38,6 +38,8 @@ export class Viewport {
   private frame = 0;
   private lastTime = performance.now();
   private keys = new Set<MoveKey>();
+  /** Espacio tapado por la interfaz flotante en cada borde (px); el mueble se centra en el resto. */
+  private insets = { l: 0, r: 0, t: 0, b: 0 };
   private cleanups: (() => void)[] = [];
 
   constructor(private readonly host: HTMLElement, private readonly store: Store) {
@@ -141,6 +143,7 @@ export class Viewport {
     if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); (this.grid.material as THREE.Material).dispose(); }
     this.grid = new THREE.GridHelper(600, 60, new THREE.Color(css('--grid-a') || '#aab5c0'), new THREE.Color(css('--grid-b') || '#c9d1d9'));
     this.grid.position.y = 0.02; this.scene.add(this.grid);
+    (this.outline.material as THREE.LineBasicMaterial).color.set(css('--accent') || '#a8682f');
   };
   private watchTheme(): void {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -153,8 +156,27 @@ export class Viewport {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    this.camera.aspect = w / h;
+    this.applyOffset();
   };
+
+  /** Indica qué parte del lienzo tapan los paneles para centrar la vista en el área libre. */
+  setInsets(i: { l: number; r: number; t: number; b: number }): void {
+    this.insets = i;
+    this.applyOffset();
+  }
+  private applyOffset(): void {
+    const w = this.host.clientWidth, h = this.host.clientHeight, { l, r, t, b } = this.insets;
+    if (!w || !h || (!l && !r && !t && !b)) this.camera.clearViewOffset();
+    else this.camera.setViewOffset(w, h, (r - l) / 2, (b - t) / 2, w, h);
+    this.camera.updateProjectionMatrix();
+  }
+  /** Cuánto más lejos hay que poner la cámara para que el mueble quepa en el área libre. */
+  private freeScale(): number {
+    const w = this.host.clientWidth, h = this.host.clientHeight, { l, r, t, b } = this.insets;
+    if (!w || !h) return 1;
+    return Math.max(1, Math.min(2, Math.max(w / Math.max(1, w - l - r), h / Math.max(1, h - t - b))));
+  }
   private watchSize(): void {
     const ro = new ResizeObserver(this.resize);
     ro.observe(this.host);
@@ -203,7 +225,7 @@ export class Viewport {
   }
 
   setView(kind: ViewKind): void {
-    const s = sceneInfo(this.store.pieces), c = V(s.center), k = s.r * 2.1, sd = cornerSide(this.store.pieces);
+    const s = sceneInfo(this.store.pieces), c = V(s.center), k = s.r * 2.1 * this.freeScale(), sd = cornerSide(this.store.pieces);
     const dir = kind === 'front' ? new THREE.Vector3(0, 0.05, 1)
       : kind === 'top' ? new THREE.Vector3(0, 1, 0.001)
       : new THREE.Vector3(0.62 * sd, 0.55, 0.82);
@@ -238,6 +260,7 @@ export class Viewport {
     const ctr = new THREE.Vector3((B.x0 + B.x1) / 2, B.y1 / 2, (B.z0 + B.z1) / 2);
     const R = 0.5 * Math.hypot(B.sx + 30, B.y1 + 15, B.sz + 30);
     const dir = new THREE.Vector3(0.62 * sd, 0.75, 0.85).normalize();
+    camera.clearViewOffset();
     camera.aspect = w / h; camera.updateProjectionMatrix();
     camera.position.copy(ctr).add(dir.multiplyScalar(R / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.82));
     camera.lookAt(ctr);
@@ -256,7 +279,7 @@ export class Viewport {
     }));
 
     renderer.setPixelRatio(this.pr); renderer.setSize(saved.size.x, saved.size.y, false);
-    camera.aspect = saved.aspect; camera.updateProjectionMatrix();
+    camera.aspect = saved.aspect; this.applyOffset();
     camera.position.copy(saved.pos); controls.target.copy(saved.tgt); controls.update();
     scene.background = saved.bg;
     if (this.grid) this.grid.visible = true;

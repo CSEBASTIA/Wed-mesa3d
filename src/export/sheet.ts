@@ -10,7 +10,7 @@ import type { Viewport } from '../three/viewport';
 type Ctx = CanvasRenderingContext2D;
 
 const INK = '#1f2328', GREY = '#6b7280', HAIR = '#c9ced4', PAPER = '#ffffff', MARK = '#d29b00';
-const FD = '"Space Grotesk", "Segoe UI", sans-serif', FB = 'Inter, "Segoe UI", sans-serif';
+const FD = 'Geist, "Segoe UI", sans-serif', FB = 'Geist, "Segoe UI", sans-serif';
 
 function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath(); ctx.moveTo(x + r, y);

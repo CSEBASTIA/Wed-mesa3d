@@ -8,7 +8,8 @@ import { store } from '../app/context';
 import { toast } from '../app/toast';
 import type { Viewport } from '../three/viewport';
 import { Modal } from './Modal';
-import { SelectField } from './fields';
+import { DraftNumber, Segmented, SelectField, Switch } from './fields';
+import { PieceIcon } from './PieceIcon';
 
 type NumKey = 'a' | 'b' | 'c' | 'd' | 't' | 'r' | 'n' | 'rw' | 'rd';
 /** En el formulario los números se guardan como texto para poder escribir libremente. */
@@ -43,15 +44,13 @@ export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | nul
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setF((prev) => ({ ...prev, [k]: v }));
   const L = f.shape === 'L';
 
-  const cajOptions: [DrawerSide, string][] = [['izq', 'Izquierda'], ['der', 'Derecha'],
-    ...(L ? [] : [['ambas', 'Ambos lados']] as [DrawerSide, string][]), ['no', 'Sin cajonera']];
+  const cajOptions: [DrawerSide, string][] = L
+    ? [['izq', 'Izquierda'], ['der', 'Derecha'], ['no', 'Sin']]
+    : [['izq', 'Izq.'], ['der', 'Der.'], ['ambas', 'Ambas'], ['no', 'Sin']];
 
-  const num = (k: NumKey, label: string) => (
-    <div className="field">
-      <label htmlFor={'t-' + k}>{label}</label>
-      <input id={'t-' + k} type="number" step={k === 'n' || k === 'a' || k === 'b' || k === 'c' ? 1 : 0.5}
-        min={NUM_LIMITS[k][0]} max={NUM_LIMITS[k][1]} value={f[k]} onChange={(e) => set(k, e.target.value)} />
-    </div>
+  const num = (k: NumKey, label: string, unit = 'cm') => (
+    <DraftNumber id={'t-' + k} label={label} value={f[k]} onChange={(v) => set(k, v)}
+      step={k === 't' || k === 'd' ? 0.5 : 1} min={NUM_LIMITS[k][0]} max={NUM_LIMITS[k][1]} unit={unit} />
   );
 
   const create = () => {
@@ -65,57 +64,69 @@ export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | nul
   };
 
   return (
-    <Modal title="Escritorio a medida" onClose={onClose}>
-      <p className="lead">Escribe las medidas y se arma el escritorio completo con tablero, soportes, faldones y cajonera. Después puedes mover o cambiar cualquier pieza.</p>
-      <div>
-        <p className="sub" style={{ marginBottom: 6 }}>Modelos de partida</p>
+    <Modal title="Escritorio a medida" onClose={onClose}
+      subtitle="Escribe las medidas y se arma el escritorio con tablero, soportes, faldones y cajonera. Después puedes ajustar cada pieza."
+      footer={<>
+        <button className="btn ghost" onClick={onClose}>Cancelar</button>
+        <button className="btn primary" onClick={create}>Crear escritorio</button>
+      </>}>
+
+      <div className="group">
+        <h4>Modelos de partida</h4>
         <div className="presets">
           {PRESETS.map((pr) => (
-            <button key={pr.label} className="btn" type="button"
-              onClick={() => setF(toDraft({ ...DEFAULT_CFG, ...pr.cfg, mt: f.mt, ms: f.ms }))}>{pr.label}</button>
+            <button key={pr.label} className="preset" type="button"
+              onClick={() => setF(toDraft({ ...DEFAULT_CFG, ...pr.cfg, mt: f.mt, ms: f.ms }))}>
+              <PieceIcon type={pr.cfg.shape === 'recto' ? 'deskRecto' : 'deskL'} />
+              <b>{pr.label}</b>
+            </button>
           ))}
         </div>
       </div>
 
-      <div className="row2">
-        <SelectField<DeskShape> id="t-shape" label="Forma" value={f.shape}
-          options={[['L', 'En L (esquinero)'], ['recto', 'Recto']]} onChange={(v) => set('shape', v)} />
-        {L && <SelectField<Side> id="t-corner" label="Esquina hacia" value={f.corner}
-          options={[['izq', 'Izquierda'], ['der', 'Derecha']]} onChange={(v) => set('corner', v)} />}
-      </div>
-
-      <p className="sub">Medidas (cm)</p>
-      <div className="row3 tpl">
-        {num('a', L ? 'a · Largo trasero' : 'a · Largo')}
-        {L && num('b', 'b · Largo lateral')}
-        {num('c', 'c · Fondo')}
-        {num('d', 'd · Altura total')}
-        {num('t', 'Grosor tablero')}
-        {L && num('r', 'Radio de la curva')}
-      </div>
-
-      <div className="row3 tpl">
-        <SelectField<DrawerSide> id="t-caj" label="Cajonera" value={!L || f.caj !== 'ambas' ? f.caj : 'izq'}
-          options={cajOptions} onChange={(v) => set('caj', v)} />
-        {f.caj !== 'no' && num('n', 'Cajones')}
-        <SelectField<MatKey> id="t-mt" label="Material tablero" value={f.mt} options={MAT_OPTIONS} onChange={(v) => set('mt', v)} />
-        <SelectField<MatKey> id="t-ms" label="Material estructura" value={f.ms} options={MAT_OPTIONS} onChange={(v) => set('ms', v)} />
-      </div>
-
-      <label className="check">
-        <input type="checkbox" id="t-room" checked={f.room} onChange={(e) => set('room', e.target.checked)} />
-        Mostrar las paredes de la habitación
-      </label>
-      {f.room && (
-        <div className="row2">
-          {num('rw', 'Pared trasera (cm)')}
-          {num('rd', 'Pared lateral (cm)')}
+      <div className="group">
+        <h4>Forma</h4>
+        <div className="shape-pick" role="radiogroup" aria-label="Forma">
+          {([['L', 'En L', 'Esquinero, dos tramos'], ['recto', 'Recto', 'Un solo tramo']] as [DeskShape, string, string][]).map(([v, t, s]) => (
+            <button key={v} role="radio" aria-checked={f.shape === v} onClick={() => set('shape', v)}>
+              <PieceIcon type={v === 'L' ? 'deskL' : 'deskRecto'} />
+              <div><b>{t}</b><span>{s}</span></div>
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      <div className="foot">
-        <button className="btn" onClick={onClose}>Cancelar</button>
-        <button className="btn primary" onClick={create}>Crear escritorio</button>
+      <div className="group">
+        <h4>Medidas</h4>
+        <div className="grid3 tpl">
+          {num('a', L ? 'a · Largo trasero' : 'a · Largo')}
+          {L && num('b', 'b · Largo lateral')}
+          {num('c', 'c · Fondo')}
+          {num('d', 'd · Altura total')}
+          {num('t', 'Grosor tablero')}
+          {L && num('r', 'Radio de la curva')}
+        </div>
+      </div>
+
+      <div className="group">
+        <h4>Estructura</h4>
+        <div className="grid2" style={{ alignItems: 'end' }}>
+          {L && <Segmented<Side> label="Esquina hacia" value={f.corner} options={[['izq', 'Izquierda'], ['der', 'Derecha']]} onChange={(v) => set('corner', v)} />}
+          <Segmented<DrawerSide> label="Cajonera" value={!L || f.caj !== 'ambas' ? f.caj : 'izq'} options={cajOptions} onChange={(v) => set('caj', v)} />
+          {f.caj !== 'no' && num('n', 'Cajones', '')}
+          <SelectField<MatKey> id="t-mt" label="Material tablero" value={f.mt} options={MAT_OPTIONS} onChange={(v) => set('mt', v)} />
+          <SelectField<MatKey> id="t-ms" label="Material estructura" value={f.ms} options={MAT_OPTIONS} onChange={(v) => set('ms', v)} />
+        </div>
+      </div>
+
+      <div className="group">
+        <Switch id="t-room" label="Mostrar las paredes de la habitación" checked={f.room} onChange={(v) => set('room', v)} />
+        {f.room && (
+          <div className="grid2" style={{ marginTop: 10 }}>
+            {num('rw', 'Pared trasera')}
+            {num('rd', 'Pared lateral')}
+          </div>
+        )}
       </div>
     </Modal>
   );
