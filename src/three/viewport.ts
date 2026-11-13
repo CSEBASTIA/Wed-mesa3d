@@ -1,12 +1,14 @@
-// Escena 3D: renderizador, cámara, luces, piezas, paredes y selección.
+// Escena 3D: renderizador, cámara, luces, piezas, entorno, selección y aro de giro.
 // Escucha los eventos del store y mantiene la escena sincronizada con el modelo.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { box, sceneInfo, bounds, cornerSide, addVec } from '../core/geometry';
+import { sceneInfo, bounds, cornerSide, addVec } from '../core/geometry';
+import { roomBounds } from '../core/room';
 import type { Store } from '../core/store';
 import type { Dim, Piece, Vec2, Vec3 } from '../core/types';
 import { buildPiece } from './builders';
-import { edgeMat, wallMat } from './materials';
+import { edgeMat } from './materials';
+import { RoomView } from './room';
 
 export type ViewKind = 'iso' | 'front' | 'top';
 
@@ -14,6 +16,8 @@ export type ViewKind = 'iso' | 'front' | 'top';
 export const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight'] as const;
 export type MoveKey = typeof MOVE_KEYS[number];
 const FAST = 2.5;
+/** Qué tan rápido la cámara alcanza la velocidad pedida o frena (1/s). Más alto = más brusco. */
+const ACCEL = 9;
 
 export interface ProjectedDim { k: string; v: number; txt: string; a: Vec2; b: Vec2; ao: Vec2; bo: Vec2 }
 export interface Snapshot { img: HTMLCanvasElement; dims: ProjectedDim[] }
@@ -23,13 +27,15 @@ const V = (a: Vec3) => new THREE.Vector3(a[0], a[1], a[2]);
 
 export class Viewport {
   readonly el: HTMLCanvasElement;
-  readonly camera = new THREE.PerspectiveCamera(40, 1, 1, 5000);
+  readonly camera = new THREE.PerspectiveCamera(40, 1, 1, 6000);
   readonly controls: OrbitControls;
+  /** Aro para girar la pieza seleccionada (lo usa interaction.ts). */
+  readonly ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
 
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly floor: THREE.Mesh<THREE.PlaneGeometry, THREE.ShadowMaterial>;
-  private readonly walls = new THREE.Group();
+  private readonly room = new RoomView();
   private readonly outline: THREE.LineSegments;
   private readonly raycaster = new THREE.Raycaster();
   private readonly pr = Math.min(window.devicePixelRatio || 1, 2);
@@ -38,6 +44,7 @@ export class Viewport {
   private frame = 0;
   private lastTime = performance.now();
   private keys = new Set<MoveKey>();
+  private velocity = new THREE.Vector3();
   /** Espacio tapado por la interfaz flotante en cada borde (px); el mueble se centra en el resto. */
   private insets = { l: 0, r: 0, t: 0, b: 0 };
   private cleanups: (() => void)[] = [];
@@ -54,30 +61,37 @@ export class Viewport {
     this.camera.position.set(170, 150, 230);
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 0.75));
     const sun = new THREE.DirectionalLight(0xffffff, 0.75);
-    sun.position.set(140, 300, 180); sun.castShadow = true;
+    sun.position.set(160, 380, 220); sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 10, far: 900 });
+    Object.assign(sun.shadow.camera, { left: -450, right: 450, top: 450, bottom: -450, near: 10, far: 1200 });
     sun.shadow.bias = -0.0005;
     this.scene.add(sun);
 
-    this.floor = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.ShadowMaterial({ opacity: 0.22 }));
+    this.floor = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.ShadowMaterial({ opacity: 0.22 }));
     this.floor.rotation.x = -Math.PI / 2; this.floor.receiveShadow = true;
-    this.scene.add(this.floor, this.walls);
+    this.scene.add(this.floor, this.room.group);
 
-    this.outline = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xf2b705, depthTest: false }));
+    this.outline = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xa8682f, depthTest: false }));
     this.outline.renderOrder = 10; this.outline.visible = false;
-    this.scene.add(this.outline);
+    this.ring = new THREE.Mesh(new THREE.RingGeometry(1, 1.1, 64),
+      new THREE.MeshBasicMaterial({ color: 0xa8682f, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthTest: false }));
+    this.ring.rotation.x = -Math.PI / 2; this.ring.renderOrder = 11; this.ring.visible = false;
+    this.scene.add(this.outline, this.ring);
 
+    // Controles de órbita con inercia: el giro sigue un poco y se detiene suave.
     this.controls = new OrbitControls(this.camera, this.el);
-    this.controls.enableDamping = true; this.controls.dampingFactor = 0.12;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.02; this.controls.minDistance = 40; this.controls.maxDistance = 1200;
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.075;
+    this.controls.screenSpacePanning = true;
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.03;
+    this.controls.minDistance = 50; this.controls.maxDistance = 1800;
 
     this.applyTheme();
     this.watchTheme();
     this.watchSize();
     this.listen();
     // si el modelo ya estaba cargado (la vista se volvió a montar), dibujarlo
-    this.syncAll(); this.buildWalls(); this.refreshOutline();
+    this.syncAll(); this.room.build(this.store.room); this.refreshOutline(); this.applyCamera();
     this.loop();
   }
 
@@ -85,7 +99,8 @@ export class Viewport {
   private listen(): void {
     const s = this.store;
     this.cleanups.push(
-      s.on('reset', () => { this.syncAll(); this.buildWalls(); this.refreshOutline(); this.applyCamera(); }),
+      s.on('reset', () => { this.syncAll(); this.room.build(s.room); this.refreshOutline(); this.applyCamera(); }),
+      s.on('room', () => this.room.build(s.room)),
       s.on('options', () => this.applyCamera()),
       s.on('added', (p) => { this.syncPiece(p); this.refreshOutline(); }),
       s.on('rebuilt', (p) => { this.syncPiece(p); this.refreshOutline(); }),
@@ -115,35 +130,33 @@ export class Viewport {
     this.store.pieces.forEach((p) => this.syncPiece(p));
   }
 
-  private buildWalls(): void {
-    for (const m of [...this.walls.children] as THREE.Mesh[]) { m.geometry.dispose(); this.walls.remove(m); }
-    const room = this.store.room; if (!room) return;
-    const s = room.corner === 'der' ? -1 : 1, W = 6, HH = 120;
-    const back = new THREE.Mesh(new THREE.BoxGeometry(room.w + W, HH, W), wallMat);
-    back.position.set(s * (room.w - W) / 2, HH / 2, -W / 2);
-    const side = new THREE.Mesh(new THREE.BoxGeometry(W, HH, room.d), wallMat);
-    side.position.set(-s * W / 2, HH / 2, room.d / 2);
-    for (const m of [back, side]) { m.receiveShadow = true; this.walls.add(m); }
-  }
-
+  /** Contorno girado con la pieza y aro de giro en el piso. */
   private refreshOutline(): void {
     const p = this.store.selected();
-    this.outline.visible = !!p;
+    this.outline.visible = this.ring.visible = !!p;
     if (!p) return;
-    const b = box(p);
     this.outline.geometry.dispose();
-    this.outline.geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(b.sx + 0.8, p.h + 0.8, b.sz + 0.8));
+    this.outline.geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(p.w + 0.8, p.h + 0.8, p.d + 0.8));
     this.outline.position.set(p.x, p.y + p.h / 2, p.z);
+    this.outline.rotation.y = p.rot * Math.PI / 2;
+    const rad = Math.hypot(p.w, p.d) / 2 + 10;
+    this.ring.geometry.dispose();
+    this.ring.geometry = new THREE.RingGeometry(rad, rad + 4, 72);
+    this.ring.position.set(p.x, Math.max(0.5, p.y) + 0.4, p.z);
   }
+  /** Resalta el aro cuando el puntero está encima. */
+  hoverRing(on: boolean): void { this.ring.material.opacity = on ? 0.95 : 0.55; }
 
   /* ---------- tema y tamaño ---------- */
   private applyTheme = (): void => {
     const css = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     this.scene.background = new THREE.Color(css('--scene-bg') || '#dfe5ea');
     if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); (this.grid.material as THREE.Material).dispose(); }
-    this.grid = new THREE.GridHelper(600, 60, new THREE.Color(css('--grid-a') || '#aab5c0'), new THREE.Color(css('--grid-b') || '#c9d1d9'));
+    this.grid = new THREE.GridHelper(1000, 100, new THREE.Color(css('--grid-a') || '#aab5c0'), new THREE.Color(css('--grid-b') || '#c9d1d9'));
     this.grid.position.y = 0.02; this.scene.add(this.grid);
-    (this.outline.material as THREE.LineBasicMaterial).color.set(css('--accent') || '#a8682f');
+    const accent = css('--accent') || '#a8682f';
+    (this.outline.material as THREE.LineBasicMaterial).color.set(accent);
+    this.ring.material.color.set(accent);
   };
   private watchTheme(): void {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -190,7 +203,7 @@ export class Viewport {
     const { rotate, zoom } = this.store.cam;
     this.controls.rotateSpeed = rotate;
     this.controls.zoomSpeed = zoom;
-    this.controls.panSpeed = rotate;
+    this.controls.panSpeed = Math.max(0.3, rotate * 1.4);
   }
 
   /** Marca una tecla de movimiento como pulsada o suelta. */
@@ -199,36 +212,55 @@ export class Viewport {
   }
   releaseKeys(): void { this.keys.clear(); }
 
-  /** Mueve cámara y punto de mira juntos, en el plano del piso, según las teclas pulsadas. */
+  /**
+   * Mueve cámara y punto de mira juntos según las teclas, con aceleración y frenado suaves.
+   * La velocidad crece con la distancia al punto de mira: de cerca se mueve fino, de lejos recorre más.
+   */
   private moveWithKeys(dt: number): void {
     const k = this.keys;
     const fwd = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0);
     const side = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     const up = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
-    if (!fwd && !side && !up) return;
 
-    const dir = new THREE.Vector3();
-    this.camera.getWorldDirection(dir);
-    dir.y = 0;
-    if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1); // vista desde arriba: "adelante" es hacia el fondo
-    dir.normalize();
-    const right = new THREE.Vector3().crossVectors(dir, this.camera.up).normalize();
-
-    const fast = k.has('ShiftLeft') || k.has('ShiftRight') ? FAST : 1;
-    const step = this.store.cam.move * fast * dt;
-    const delta = dir.multiplyScalar(fwd * step).add(right.multiplyScalar(side * step));
-    delta.y = up * step;
-    // no dejar que el punto de mira baje del piso
-    if (this.controls.target.y + delta.y < 0) delta.y = -this.controls.target.y;
+    const want = new THREE.Vector3();
+    if (fwd || side || up) {
+      const dir = new THREE.Vector3();
+      this.camera.getWorldDirection(dir);
+      dir.y = 0;
+      if (dir.lengthSq() < 1e-6) dir.set(0, 0, -1); // vista desde arriba: "adelante" es hacia el fondo
+      dir.normalize();
+      const right = new THREE.Vector3().crossVectors(dir, this.camera.up).normalize();
+      const dist = this.camera.position.distanceTo(this.controls.target);
+      const fast = k.has('ShiftLeft') || k.has('ShiftRight') ? FAST : 1;
+      const speed = this.store.cam.move * fast * THREE.MathUtils.clamp(dist / 300, 0.35, 3);
+      want.addScaledVector(dir, fwd).addScaledVector(right, side);
+      if (want.lengthSq() > 0) want.normalize();
+      want.y = up;
+      want.multiplyScalar(speed);
+    }
+    // acercarse a la velocidad deseada de forma exponencial (independiente de los fps)
+    this.velocity.lerp(want, 1 - Math.exp(-ACCEL * dt));
+    if (this.velocity.lengthSq() < 0.01 && !want.lengthSq()) { this.velocity.set(0, 0, 0); return; }
+    const delta = this.velocity.clone().multiplyScalar(dt);
+    if (this.controls.target.y + delta.y < 0) { delta.y = -this.controls.target.y; this.velocity.y = 0; }
     this.camera.position.add(delta);
     this.controls.target.add(delta);
   }
 
   setView(kind: ViewKind): void {
-    const s = sceneInfo(this.store.pieces), c = V(s.center), k = s.r * 2.1 * this.freeScale(), sd = cornerSide(this.store.pieces);
+    const s = sceneInfo(this.store.pieces);
+    let c = V(s.center), r = s.r;
+    if (this.store.room) {
+      // con entorno, encuadrar la habitación completa
+      const rb = roomBounds(this.store.room);
+      c = new THREE.Vector3((rb.x0 + rb.x1) / 2, 60, (rb.z0 + rb.z1) / 2);
+      r = Math.max(rb.x1 - rb.x0, rb.z1 - rb.z0) * 0.9;
+    }
+    const k = r * 2.1 * this.freeScale(), sd = cornerSide(this.store.pieces);
     const dir = kind === 'front' ? new THREE.Vector3(0, 0.05, 1)
       : kind === 'top' ? new THREE.Vector3(0, 1, 0.001)
-      : new THREE.Vector3(0.62 * sd, 0.55, 0.82);
+      : new THREE.Vector3(0.62 * sd, 0.62, 0.82);
+    this.velocity.set(0, 0, 0);
     this.camera.position.copy(c).add(dir.normalize().multiplyScalar(k));
     this.controls.target.copy(c); this.controls.update();
   }
@@ -250,6 +282,10 @@ export class Viewport {
     }
     return null;
   }
+  /** ¿El puntero está sobre el aro de giro? */
+  pickRing(e: PointerEvent | MouseEvent): boolean {
+    return this.ring.visible && this.rayFromEvent(e).intersectObject(this.ring, false).length > 0;
+  }
 
   /** Foto limpia para la exportación (fondo blanco, bordes marcados) y cotas proyectadas a la imagen. */
   snapshot(w: number, h: number, dims: Dim[]): Snapshot {
@@ -266,7 +302,7 @@ export class Viewport {
     camera.lookAt(ctr);
     scene.background = new THREE.Color('#ffffff');
     if (this.grid) this.grid.visible = false;
-    this.outline.visible = false; this.walls.visible = false;
+    this.outline.visible = false; this.ring.visible = false; this.room.setVisible(false);
     edgeMat.opacity = 0.75; edgeMat.color.set(0x2a2e33); this.floor.material.opacity = 0.08;
     renderer.setPixelRatio(1); renderer.setSize(w, h, false);
     renderer.render(scene, camera);
@@ -283,7 +319,7 @@ export class Viewport {
     camera.position.copy(saved.pos); controls.target.copy(saved.tgt); controls.update();
     scene.background = saved.bg;
     if (this.grid) this.grid.visible = true;
-    this.walls.visible = true;
+    this.room.setVisible(true);
     edgeMat.opacity = 0.22; edgeMat.color.set(0x000000); this.floor.material.opacity = 0.22;
     this.refreshOutline();
     return { img, dims: projected };
@@ -298,9 +334,10 @@ export class Viewport {
     this.groups.forEach((g) => {
       const s = g.userData.slide as THREE.Group | undefined;
       const open = s?.userData.open as number | undefined;
-      if (s && open != null && Math.abs(s.position.z - open) > 0.01) s.position.z += (open - s.position.z) * 0.18;
+      if (s && open != null && Math.abs(s.position.z - open) > 0.01) s.position.z += (open - s.position.z) * (1 - Math.exp(-12 * dt));
     });
     this.controls.update();
+    this.room.update(this.camera);
     this.renderer.render(this.scene, this.camera);
   };
 

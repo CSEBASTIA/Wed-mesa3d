@@ -5,6 +5,12 @@ import { r5, clone } from './format';
 import type { Store } from './store';
 import type { Piece, PieceType } from './types';
 
+/** Deja el giro entre 0 y 4 cuartos de vuelta, redondeado a décimas de grado. */
+export const normRot = (r: number): number => {
+  const q = ((r % 4) + 4) % 4;
+  return Math.round(q * 900) / 900;
+};
+
 export function createActions(store: Store) {
   return {
     addPiece(type: PieceType): Piece {
@@ -28,7 +34,16 @@ export function createActions(store: Store) {
       const c = clone(p); c.id = store.newId(); c.x += 10; c.z += 10; c.open = false;
       store.add(c);
     },
-    rotateSelected(): void { const p = store.selected(); if (p) store.update(p.id, { rot: (p.rot + 1) % 4 }); },
+    /** Gira la pieza seleccionada los grados indicados (por defecto 90°). */
+    rotateSelected(deg = 90): void {
+      const p = store.selected(); if (!p) return;
+      store.update(p.id, { rot: normRot(p.rot + deg / 90) });
+    },
+    /** Fija el giro en grados. */
+    setAngle(deg: number): void {
+      const p = store.selected(); if (!p) return;
+      store.update(p.id, { rot: normRot(deg / 90) });
+    },
     /** Baja la pieza hasta el piso o hasta la pieza que tenga debajo. */
     dropSelected(): void {
       const p = store.selected(); if (!p) return;

@@ -6,6 +6,7 @@ import { Icon, BrandMark, type IconName } from './Icon';
 interface TopBarProps {
   onExport: () => void;
   onCamera: () => void;
+  onEnvironment: () => void;
 }
 
 function Tool({ icon, label, onClick, pressed, disabled, danger }: {
@@ -19,7 +20,7 @@ function Tool({ icon, label, onClick, pressed, disabled, danger }: {
   );
 }
 
-export function TopBar({ onExport, onCamera }: TopBarProps) {
+export function TopBar({ onExport, onCamera, onEnvironment }: TopBarProps) {
   useStoreVersion();
   const clear = () => {
     if (!store.pieces.length) return;
@@ -47,6 +48,9 @@ export function TopBar({ onExport, onCamera }: TopBarProps) {
       </div>
 
       <div className="actions-r">
+        <button className="icon-btn float" title="Entorno: cuarto, sala u oficina" aria-label="Entorno" onClick={onEnvironment}>
+          <Icon name="home" />
+        </button>
         <button className="icon-btn float" title="Cámara y sensibilidad" aria-label="Cámara y sensibilidad" onClick={onCamera}>
           <Icon name="sliders" />
         </button>

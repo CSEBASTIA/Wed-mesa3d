@@ -21,7 +21,14 @@ const PATHS = {
   keyboard: ['M3 6h18v12H3z', 'M7 10h.01', 'M11 10h.01', 'M15 10h.01', 'M7 14h10'],
   plus: ['M12 5v14', 'M5 12h14'],
   check: ['m5 12 5 5 9-10'],
-  layers: ['M12 3 2 8l10 5 10-5z', 'm2 13 10 5 10-5']
+  layers: ['M12 3 2 8l10 5 10-5z', 'm2 13 10 5 10-5'],
+  hideLeft: ['M3 4h18v16H3z', 'M9 4v16', 'm16 9-3 3 3 3'],
+  showLeft: ['M3 4h18v16H3z', 'M9 4v16', 'm13 9 3 3-3 3'],
+  hideRight: ['M3 4h18v16H3z', 'M15 4v16', 'm8 9 3 3-3 3'],
+  showRight: ['M3 4h18v16H3z', 'M15 4v16', 'm11 9-3 3 3 3'],
+  home: ['M3 11 12 4l9 7', 'M5 10v10h14V10', 'M10 20v-6h4v6'],
+  door: ['M6 21V3h12v18', 'M3 21h18', 'M14 12h.01'],
+  window: ['M4 4h16v16H4z', 'M12 4v16', 'M4 12h16']
 } as const;
 
 export type IconName = keyof typeof PATHS;

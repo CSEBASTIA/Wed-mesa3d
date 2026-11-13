@@ -22,7 +22,7 @@ export function Stage({ onReady }: { onReady: (vp: Viewport | null) => void }) {
   }, [onReady]);
 
   return (
-    <main className="stage" aria-label="Escena 3D. Arrastra piezas para moverlas, el fondo para girar y usa WASD para mover la cámara.">
+    <main className="stage" aria-label="Escena 3D. Doble clic en una pieza para activarla y moverla; arrastra el fondo para girar y usa WASD para mover la cámara.">
       <div id="view" ref={host} />
       {msg && <div className="toast" role="status">{msg}</div>}
     </main>

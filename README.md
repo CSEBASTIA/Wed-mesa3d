@@ -2,7 +2,8 @@
 
 Editor 3D en el navegador para diseñar escritorios a medida y mandarle el plano al carpintero.
 
-- **Escritorio a medida:** en L (esquinero) o recto, con cajonera, paredes de la habitación y espacio libre.
+- **Entorno:** cuarto, sala u oficina con medidas, piso, color de paredes, puertas y ventanas. Las paredes que tapan la vista se recortan solas.
+- **Escritorio a medida:** en L (esquinero) o recto, con cajonera; se arma en la esquina del entorno.
 - **Piezas sueltas:** tableros, tablero en L, paneles, estantes, faldones, patas, cajonera y cajones.
 - **Exportar plano (JPG/PNG):** vista 3D con cotas a/b/c/d, vista superior a escala y despiece completo.
 
@@ -67,10 +68,12 @@ lo guarda en `localStorage`, apila el historial y emite eventos tipados (`reset`
 
 ## Controles
 
-- Arrastra una pieza para moverla; con Shift (o "Mover en altura") sube y baja.
+- **Doble clic** en una pieza para activarla; solo la pieza activa se puede arrastrar (con Shift o "Mover en altura" sube y baja).
+- **Girar:** arrastra el aro que rodea la pieza activa (de 15° en 15° con el imán, libre con Alt), escribe los grados en la ficha o usa R (90°) y Shift+R (15°).
 - Arrastra el fondo para girar la vista; la rueda acerca y aleja; clic derecho desplaza.
 - **Cámara con teclado:** W adelante · S atrás · A izquierda · D derecha · Q bajar · E subir · Shift más rápido.
   Las teclas van por posición física, así que funcionan igual en otros teclados (por ejemplo AZERTY).
 - Botón **Cámara**: velocidad del teclado y sensibilidad del giro y del zoom (se guardan en el navegador).
-- Doble clic en un cajón para abrirlo o cerrarlo.
-- Flechas: mover · R: girar · Supr: eliminar · Ctrl+Z / Ctrl+Y: deshacer / rehacer.
+- Doble clic en un cajón activo para abrirlo o cerrarlo.
+- Los paneles laterales se minimizan con el botón de su esquina.
+- Flechas: mover · Supr: eliminar · Ctrl+Z / Ctrl+Y: deshacer / rehacer.

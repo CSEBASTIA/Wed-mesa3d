@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { MATS, MAT_KEYS, TYPES, EXTRA_FIELDS, limitValue, type EditableKey } from '../core/catalog';
 import { pieceLabel } from '../core/cutlist';
+import { rotDeg } from '../core/geometry';
 import type { Piece } from '../core/types';
 import { store, actions } from '../app/context';
 import { NumberField } from './fields';
@@ -15,7 +16,7 @@ export function Inspector() {
       <div className="empty-state">
         <PieceIcon type="deskL" />
         <b>Ninguna pieza seleccionada</b>
-        <p>Toca una pieza en la escena para cambiar sus medidas, su posición y su material.</p>
+        <p>Haz <b>doble clic</b> en una pieza para activarla. Así no se mueve nada por accidente: solo la pieza activa se puede arrastrar y editar.</p>
       </div>
     );
   }
@@ -79,6 +80,15 @@ function PieceForm({ p }: { p: Piece }) {
           <NumberField id="f-y" label="Del piso" value={p.y} onCommit={set('y')} min={0} />
           <NumberField id="f-z" label="Atrás / frente" value={p.z} onCommit={set('z')} />
         </div>
+        <div className="rotate-row">
+          <NumberField id="f-rot" label="Giro" value={rotDeg(p)} onCommit={(v) => actions.setAngle(v)} step={1} unit="°" />
+          <div className="seg" role="group" aria-label="Girar">
+            <button type="button" title="Girar 15° a la izquierda (Shift+R)" onClick={() => actions.rotateSelected(15)}>↺ 15°</button>
+            <button type="button" title="Girar 15° a la derecha" onClick={() => actions.rotateSelected(-15)}>↻ 15°</button>
+            <button type="button" title="Girar 90° (R)" onClick={() => actions.rotateSelected(90)}>90°</button>
+          </div>
+        </div>
+        <p className="hint-line">También puedes arrastrar el aro que rodea la pieza. Con el imán gira de 15° en 15°; mantén Alt para un giro libre.</p>
       </div>
 
       <div className="section">
@@ -94,7 +104,7 @@ function PieceForm({ p }: { p: Piece }) {
 
       <div className="section">
         <div className="quick">
-          <Quick icon="rotate" label="Girar" onClick={actions.rotateSelected} />
+          <Quick icon="rotate" label="Girar 90°" onClick={() => actions.rotateSelected(90)} />
           <Quick icon="drop" label="Apoyar" onClick={actions.dropSelected} />
           <Quick icon="copy" label="Duplicar" onClick={actions.duplicateSelected} />
           <Quick icon="trash" label="Eliminar" onClick={actions.removeSelected} danger />

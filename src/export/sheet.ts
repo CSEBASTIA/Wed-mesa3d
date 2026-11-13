@@ -4,7 +4,8 @@ import { bounds, footprint, getDims, mainTop, box, addVec } from '../core/geomet
 import { cutList } from '../core/cutlist';
 import { fmt } from '../core/format';
 import type { Store } from '../core/store';
-import type { Piece, Room, Vec2, Vec3 } from '../core/types';
+import type { Piece, Room, Vec2, Vec3, WallSide } from '../core/types';
+import { WALL_SIDES, WALL_T, clampOpening, normalizeRoom, roomBounds, wallFrame, wallSegments } from '../core/room';
 import type { Viewport } from '../three/viewport';
 
 type Ctx = CanvasRenderingContext2D;
@@ -66,26 +67,62 @@ function drawPlan(ctx: Ctx, X: number, Y: number, W: number, H: number, { pieces
   const B = bounds(pieces); if (!B) return;
   const s = room ? (room.corner === 'der' ? -1 : 1) : 1;
   let minX = B.x0, maxX = B.x1, minZ = B.z0, maxZ = B.z1;
-  if (room) {
-    minX = Math.min(minX, s > 0 ? -6 : -room.w); maxX = Math.max(maxX, s > 0 ? room.w : 6);
-    minZ = Math.min(minZ, -6); maxZ = Math.max(maxZ, room.d);
+  const R = room ? normalizeRoom(room) : null;
+  const rb = R ? roomBounds(R) : null;
+  if (rb) {
+    minX = Math.min(minX, rb.x0 - WALL_T); maxX = Math.max(maxX, rb.x1 + WALL_T);
+    minZ = Math.min(minZ, rb.z0 - WALL_T); maxZ = Math.max(maxZ, rb.z1 + WALL_T);
   }
   const m = 90, k = Math.min((W - 2 * m) / (maxX - minX), (H - 2 * m - 30) / (maxZ - minZ));
   const ox = X + (W - (maxX - minX) * k) / 2 - minX * k, oz = Y + 30 + (H - 30 - (maxZ - minZ) * k) / 2 - minZ * k;
   const P = (x: number, z: number): Vec2 => [ox + x * k, oz + z * k];
 
-  if (room) {
-    const r0 = P(s > 0 ? 0 : -room.w, 0), r1 = P(s > 0 ? room.w : 0, room.d);
+  if (R && rb) {
+    const r0 = P(rb.x0, rb.z0), r1 = P(rb.x1, rb.z1);
     ctx.fillStyle = '#f4f2ed'; ctx.fillRect(r0[0], r0[1], r1[0] - r0[0], r1[1] - r0[1]);
-    ctx.fillStyle = '#5b5f64';
-    const bw = P(s > 0 ? -6 : -room.w, -6), bw2 = P(s > 0 ? room.w : 6, 0);
-    ctx.fillRect(Math.min(bw[0], bw2[0]), bw[1], Math.abs(bw2[0] - bw[0]), bw2[1] - bw[1]);
-    const sw = P(s > 0 ? -6 : 0, 0), sw2 = P(s > 0 ? 0 : 6, room.d);
-    ctx.fillRect(Math.min(sw[0], sw2[0]), sw[1], Math.abs(sw2[0] - sw[0]), sw2[1] - sw[1]);
+    // punto sobre una pared: u a lo largo, n hacia afuera
+    const onWall = (side: WallSide, u: number, n: number): Vec2 => {
+      const f = wallFrame(R, side);
+      return P(f.start[0] + f.dir[0] * u + f.out[0] * n, f.start[1] + f.dir[1] * u + f.out[1] * n);
+    };
+    ctx.lineCap = 'butt';
+    for (const side of WALL_SIDES) {
+      // muros (solo los tramos que llegan al piso; bajo las ventanas se dibuja más claro)
+      for (const [a, b, lo, hi] of wallSegments(R, side)) {
+        if (lo > 0) continue;
+        const p1 = onWall(side, a, WALL_T / 2), p2 = onWall(side, b, WALL_T / 2);
+        ctx.strokeStyle = hi >= R.h - 0.5 ? '#4b4f55' : '#9a9ea4'; ctx.lineWidth = WALL_T * k;
+        ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
+      }
+      for (const o0 of R.openings.filter((o) => o.wall === side)) {
+        const o = clampOpening(R, o0);
+        if (o.type === 'ventana') {
+          ctx.strokeStyle = '#ffffff'; ctx.lineWidth = WALL_T * k * 0.5;
+          const a = onWall(side, o.pos, WALL_T / 2), b = onWall(side, o.pos + o.width, WALL_T / 2);
+          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+          ctx.strokeStyle = '#4b4f55'; ctx.lineWidth = 1.5;
+          for (const n of [WALL_T * 0.3, WALL_T * 0.7]) {
+            const c = onWall(side, o.pos, n), d = onWall(side, o.pos + o.width, n);
+            ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+          }
+        } else {
+          // puerta: hoja abierta hacia adentro y arco de abatimiento
+          const hinge = onWall(side, o.pos, 0), end = onWall(side, o.pos + o.width, 0), leaf = onWall(side, o.pos, -o.width);
+          ctx.strokeStyle = '#4b4f55'; ctx.lineWidth = 2.5;
+          ctx.beginPath(); ctx.moveTo(hinge[0], hinge[1]); ctx.lineTo(leaf[0], leaf[1]); ctx.stroke();
+          ctx.lineWidth = 1.5; ctx.setLineDash([7, 6]);
+          const a0 = Math.atan2(end[1] - hinge[1], end[0] - hinge[0]), a1 = Math.atan2(leaf[1] - hinge[1], leaf[0] - hinge[0]);
+          let da = a1 - a0; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+          ctx.beginPath(); ctx.arc(hinge[0], hinge[1], o.width * k, a0, a0 + da, da < 0); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+    }
     ctx.font = '500 24px ' + FB; ctx.fillStyle = GREY; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    const bc = P(s * room.w / 2, -6); ctx.fillText('Pared ' + fmt(room.w) + ' cm', bc[0], bc[1] - 48);
-    ctx.save(); const scn = P(-s * 6, room.d / 2); ctx.translate(scn[0] - s * 52, scn[1]); ctx.rotate(-s * Math.PI / 2);
-    ctx.fillText('Pared ' + fmt(room.d) + ' cm', 0, 0); ctx.restore();
+    const bc = P((rb.x0 + rb.x1) / 2, rb.z0 - WALL_T); ctx.fillText('Pared ' + fmt(R.w) + ' cm', bc[0], bc[1] - 48);
+    ctx.save(); const sx = s > 0 ? rb.x0 - WALL_T : rb.x1 + WALL_T, scn = P(sx, (rb.z0 + rb.z1) / 2);
+    ctx.translate(scn[0] - s * 52, scn[1]); ctx.rotate(-s * Math.PI / 2);
+    ctx.fillText('Pared ' + fmt(R.d) + ' cm', 0, 0); ctx.restore();
   }
 
   for (const p of [...pieces].sort((a, b) => (a.y + a.h) - (b.y + b.h))) {

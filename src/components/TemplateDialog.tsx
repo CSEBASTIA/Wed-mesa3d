@@ -40,7 +40,9 @@ function fromDraft(d: Draft): DeskConfig {
 const MAT_OPTIONS = MAT_KEYS.map((k): [MatKey, string] => [k, MATS[k].name]);
 
 export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | null; onClose: () => void }) {
-  const [f, setF] = useState<Draft>(() => toDraft(store.cfg));
+  // con un entorno ya creado, por defecto se usa ese entorno (no se cambian sus medidas)
+  const hasRoom = !!store.room;
+  const [f, setF] = useState<Draft>(() => ({ ...toDraft(store.cfg), room: hasRoom ? false : store.cfg.room }));
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setF((prev) => ({ ...prev, [k]: v }));
   const L = f.shape === 'L';
 
@@ -57,7 +59,12 @@ export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | nul
     const cfg = fromDraft(f);
     store.setCfg(cfg);
     store.setProj({ name: projectName(cfg) });
-    store.replaceAll(genTemplate(cfg, () => store.newId()), roomFromCfg(cfg));
+    // El escritorio se arma en la esquina trasera de la habitación. Si ya hay un entorno se conserva su estilo
+    // (piso, paredes, puertas) y solo se ajusta la esquina; si se pidieron paredes nuevas, también sus medidas.
+    const corner = cfg.shape === 'L' ? cfg.corner : 'izq';
+    const fresh = roomFromCfg(cfg);
+    const room = fresh ? { ...(store.room ?? {}), ...fresh } : store.room ? { ...store.room, corner } : null;
+    store.replaceAll(genTemplate(cfg, () => store.newId()), room);
     viewport?.setView('iso');
     onClose();
     toast('Escritorio creado. Deshacer recupera el diseño anterior.');
@@ -76,7 +83,7 @@ export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | nul
         <div className="presets">
           {PRESETS.map((pr) => (
             <button key={pr.label} className="preset" type="button"
-              onClick={() => setF(toDraft({ ...DEFAULT_CFG, ...pr.cfg, mt: f.mt, ms: f.ms }))}>
+              onClick={() => setF({ ...toDraft({ ...DEFAULT_CFG, ...pr.cfg, mt: f.mt, ms: f.ms }), ...(hasRoom ? { room: false } : {}) })}>
               <PieceIcon type={pr.cfg.shape === 'recto' ? 'deskRecto' : 'deskL'} />
               <b>{pr.label}</b>
             </button>
@@ -120,7 +127,9 @@ export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | nul
       </div>
 
       <div className="group">
-        <Switch id="t-room" label="Mostrar las paredes de la habitación" checked={f.room} onChange={(v) => set('room', v)} />
+        <Switch id="t-room" label={hasRoom ? 'Cambiar las medidas del entorno actual' : 'Agregar paredes alrededor del escritorio'}
+          checked={f.room} onChange={(v) => set('room', v)} />
+        {hasRoom && !f.room && <p className="note" style={{ marginTop: 6 }}>El escritorio se arma en la esquina trasera del entorno que ya creaste.</p>}
         {f.room && (
           <div className="grid2" style={{ marginTop: 10 }}>
             {num('rw', 'Pared trasera')}

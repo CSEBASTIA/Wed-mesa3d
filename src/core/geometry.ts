@@ -2,9 +2,14 @@
 import type { Box, Dim, Piece, Vec2, Vec3 } from './types';
 import { clamp } from './format';
 
-/** Caja envolvente de una pieza (los giros son de 90°). */
+/** Giro en grados (rot está en cuartos de vuelta y puede tener decimales). */
+export const rotDeg = (p: Piece): number => ((p.rot * 90) % 360 + 360) % 360;
+
+/** Caja envolvente alineada a los ejes de una pieza, con cualquier giro. */
 export function box(p: Piece): Box {
-  const odd = p.rot % 2 === 1, sx = odd ? p.d : p.w, sz = odd ? p.w : p.d;
+  const th = p.rot * Math.PI / 2, c = Math.abs(Math.cos(th)), s = Math.abs(Math.sin(th));
+  const r = (n: number) => Math.round(n * 1000) / 1000;
+  const sx = r(p.w * c + p.d * s), sz = r(p.w * s + p.d * c);
   return { x0: p.x - sx / 2, x1: p.x + sx / 2, y0: p.y, y1: p.y + p.h, z0: p.z - sz / 2, z1: p.z + sz / 2, sx, sz };
 }
 

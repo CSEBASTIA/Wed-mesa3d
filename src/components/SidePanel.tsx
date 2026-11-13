@@ -8,7 +8,7 @@ import { Icon } from './Icon';
 
 type Tab = 'pieza' | 'piezas' | 'despiece';
 
-export function SidePanel({ onExport }: { onExport: () => void }) {
+export function SidePanel({ onExport, onCollapse }: { onExport: () => void; onCollapse: () => void }) {
   useStoreVersion();
   const [tab, setTab] = useState<Tab>('pieza');
   const selId = store.selId;
@@ -24,12 +24,17 @@ export function SidePanel({ onExport }: { onExport: () => void }) {
 
   return (
     <aside className="panel right float edge-r" aria-label="Detalle">
-      <div className="tabs" role="tablist">
-        {tabs.map(([t, label, count]) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
-            {label}{count != null && <span className="count">{count}</span>}
-          </button>
-        ))}
+      <div className="tabs-row">
+        <div className="tabs" role="tablist">
+          {tabs.map(([t, label, count]) => (
+            <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
+              {label}{count != null && <span className="count">{count}</span>}
+            </button>
+          ))}
+        </div>
+        <button className="icon-btn sm" title="Minimizar panel" aria-label="Minimizar panel de detalle" onClick={onCollapse}>
+          <Icon name="hideRight" size={17} />
+        </button>
       </div>
 
       <div className="panel-body" role="tabpanel">

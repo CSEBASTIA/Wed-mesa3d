@@ -20,7 +20,7 @@ export interface Piece {
   x: number;
   y: number;
   z: number;
-  /** Giros de 90° alrededor del eje vertical (0-3). */
+  /** Giro alrededor del eje vertical, en cuartos de vuelta (1 = 90°). Admite decimales para giros libres. */
   rot: number;
   mat: MatKey;
   /** Tablero en L: fondo del tablero. */
@@ -46,10 +46,38 @@ export interface Box {
 
 export type Side = 'izq' | 'der';
 
+export type WallSide = 'trasera' | 'izquierda' | 'derecha' | 'frontal';
+export type OpeningType = 'puerta' | 'ventana';
+export type RoomKind = 'cuarto' | 'sala' | 'oficina' | 'libre';
+export type FloorKind = 'madera' | 'roble-claro' | 'ceramica' | 'alfombra' | 'cemento';
+
+/** Puerta o ventana en una pared. `pos` se mide desde el extremo izquierdo de la pared (visto desde dentro). */
+export interface Opening {
+  id: string;
+  wall: WallSide;
+  type: OpeningType;
+  pos: number;
+  width: number;
+  height: number;
+  /** Altura desde el piso (0 en puertas). */
+  sill: number;
+}
+
+/**
+ * Habitación. El interior va de z = 0 (pared trasera) a z = d (pared frontal).
+ * `corner` indica qué esquina trasera está en x = 0: con 'izq' el interior va de x = 0 a w; con 'der', de -w a 0.
+ */
 export interface Room {
   w: number;
   d: number;
   corner: Side;
+  /** Alto de las paredes. */
+  h?: number;
+  kind?: RoomKind;
+  floor?: FloorKind;
+  /** Color de las paredes. */
+  wall?: string;
+  openings?: Opening[];
 }
 
 export type DeskShape = 'L' | 'recto';

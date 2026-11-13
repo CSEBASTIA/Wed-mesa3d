@@ -85,9 +85,22 @@ function RoundLeg() {
   );
 }
 
-export function PieceIcon({ type }: { type: PieceType | 'deskL' | 'deskRecto' }) {
+/** Habitación: piso y dos paredes con una ventana. */
+const ROOM: Block[] = [
+  { at: [0, 0, 0], size: [14, 0.4, 12], wood: true },
+  { at: [-0.6, 0, -0.6], size: [0.6, 8, 12.6] },
+  { at: [0, 0, -0.6], size: [4, 8, 0.6] },
+  { at: [4, 0, -0.6], size: [5, 3, 0.6] },
+  { at: [4, 6.5, -0.6], size: [5, 1.5, 0.6] },
+  { at: [9, 0, -0.6], size: [5, 8, 0.6] },
+  { at: [1.5, 0.4, 7.5], size: [5, 3.2, 3], lines: 0 }
+];
+
+export type IconShape = PieceType | 'deskL' | 'deskRecto' | 'room';
+
+export function PieceIcon({ type }: { type: IconShape }) {
   if (type === 'patar') return <RoundLeg />;
-  const blocks = type === 'deskL' ? DESK_L : type === 'deskRecto' ? DESK_RECTO : SHAPES[type];
+  const blocks = type === 'deskL' ? DESK_L : type === 'deskRecto' ? DESK_RECTO : type === 'room' ? ROOM : SHAPES[type];
   const { viewBox, shapes } = render(blocks);
   return <svg className="iso" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true">{shapes}</svg>;
 }

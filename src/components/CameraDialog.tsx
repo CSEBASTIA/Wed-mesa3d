@@ -45,8 +45,8 @@ export function CameraDialog({ onClose }: { onClose: () => void }) {
         <h4>Sensibilidad</h4>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Slider id="move" label="Velocidad con teclado" min={20} max={400} step={10} unit=" cm/s" />
-          <Slider id="rotate" label="Giro con el mouse" min={0.2} max={3} step={0.1} unit="×" />
-          <Slider id="zoom" label="Zoom con la rueda" min={0.2} max={3} step={0.1} unit="×" />
+          <Slider id="rotate" label="Giro con el mouse" min={0.1} max={1.5} step={0.05} unit="×" />
+          <Slider id="zoom" label="Zoom con la rueda" min={0.1} max={1.5} step={0.05} unit="×" />
         </div>
       </div>
       <p className="note">Con el mouse: arrastra el fondo para girar, usa la rueda para acercar y el clic derecho para desplazar.</p>

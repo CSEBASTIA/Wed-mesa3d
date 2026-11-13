@@ -1,5 +1,5 @@
 // Composición de la pantalla: escena a pantalla completa con la interfaz flotando encima.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Viewport } from './three/viewport';
 import { store } from './app/context';
 import { toast } from './app/toast';
@@ -14,35 +14,55 @@ import { BottomBar } from './components/BottomBar';
 import { TemplateDialog } from './components/TemplateDialog';
 import { ExportDialog } from './components/ExportDialog';
 import { CameraDialog } from './components/CameraDialog';
+import { EnvironmentDialog } from './components/EnvironmentDialog';
+import { Icon } from './components/Icon';
 
-type Dialog = 'template' | 'export' | 'camera' | null;
+type Dialog = 'template' | 'export' | 'camera' | 'environment' | null;
+
+const PANELS_KEY = 'taller-paneles';
+function readPanels(): { left: boolean; right: boolean } {
+  try { const v = JSON.parse(localStorage.getItem(PANELS_KEY) || ''); if (v && typeof v.left === 'boolean') return v; } catch { /* nada */ }
+  return { left: true, right: true };
+}
 
 export function App() {
   const [viewport, setViewport] = useState<Viewport | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [panels, setPanels] = useState(readPanels);
   const close = useCallback(() => setDialog(null), []);
   const onReady = useCallback((vp: Viewport | null) => setViewport(vp), []);
   useShortcuts(dialog === null);
   // con la ventana de cámara abierta se puede probar el movimiento mientras se ajusta
   useCameraKeys(viewport, dialog === null || dialog === 'camera');
-  useViewInsets(viewport);
+  useViewInsets(viewport, panels);
+  useEffect(() => { try { localStorage.setItem(PANELS_KEY, JSON.stringify(panels)); } catch { /* nada */ } }, [panels]);
 
   const openExport = () => {
     if (!store.pieces.length) { toast('Agrega piezas o crea un escritorio a medida antes de exportar.'); return; }
     setDialog('export');
   };
   const openCamera = () => setDialog('camera');
+  const toggle = (side: 'left' | 'right') => setPanels((p) => ({ ...p, [side]: !p[side] }));
 
   return (
-    <div className="app">
+    <div className={'app' + (panels.left ? '' : ' no-left') + (panels.right ? '' : ' no-right')}>
       <Stage onReady={onReady} />
-      <TopBar onExport={openExport} onCamera={openCamera} />
-      <LibraryPanel onTemplate={() => setDialog('template')} />
-      <SidePanel onExport={openExport} />
+      <TopBar onExport={openExport} onCamera={openCamera} onEnvironment={() => setDialog('environment')} />
+      {panels.left
+        ? <LibraryPanel onTemplate={() => setDialog('template')} onEnvironment={() => setDialog('environment')} onCollapse={() => toggle('left')} />
+        : <button className="panel-tab float left" title="Mostrar biblioteca" aria-label="Mostrar biblioteca" onClick={() => toggle('left')}>
+            <Icon name="showLeft" /><span>Biblioteca</span>
+          </button>}
+      {panels.right
+        ? <SidePanel onExport={openExport} onCollapse={() => toggle('right')} />
+        : <button className="panel-tab float right" title="Mostrar detalle" aria-label="Mostrar panel de detalle" onClick={() => toggle('right')}>
+            <Icon name="showRight" /><span>Detalle</span>
+          </button>}
       <BottomBar viewport={viewport} onCamera={openCamera} />
       {dialog === 'template' && <TemplateDialog viewport={viewport} onClose={close} />}
       {dialog === 'export' && viewport && <ExportDialog viewport={viewport} onClose={close} />}
       {dialog === 'camera' && <CameraDialog onClose={close} />}
+      {dialog === 'environment' && <EnvironmentDialog viewport={viewport} onClose={close} />}
     </div>
   );
 }

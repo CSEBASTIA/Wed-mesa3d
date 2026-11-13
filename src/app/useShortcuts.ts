@@ -19,7 +19,8 @@ export function useShortcuts(enabled: boolean): void {
       if (!store.selected()) return;
       if (mod && k === 'd') { e.preventDefault(); actions.duplicateSelected(); return; }
       if (k === 'delete' || k === 'backspace') { e.preventDefault(); actions.removeSelected(); return; }
-      if (k === 'r' && !mod) { actions.rotateSelected(); return; }
+      // R gira 90°, Shift+R gira 15°
+      if (k === 'r' && !mod) { actions.rotateSelected(e.shiftKey ? 15 : 90); return; }
       const m = MOVES[k];
       if (m) {
         e.preventDefault();

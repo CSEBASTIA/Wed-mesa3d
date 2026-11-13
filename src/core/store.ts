@@ -4,7 +4,9 @@ import { DEFAULT_CFG, genTemplate } from './templates';
 import { clone } from './format';
 import type { CameraSettings, DeskConfig, Piece, Project, Room } from './types';
 
-export const DEFAULT_CAMERA: CameraSettings = { move: 120, rotate: 1, zoom: 1 };
+export const DEFAULT_CAMERA: CameraSettings = { move: 90, rotate: 0.5, zoom: 0.6 };
+/** Versión de los ajustes de cámara: al cambiar los valores por defecto se descartan los guardados. */
+const CAM_VERSION = 2;
 
 const KEY = 'taller-escritorios-v2';
 const OLD_KEY = 'taller-escritorios-v1';
@@ -25,6 +27,8 @@ export interface StoreEvents {
   history: void;
   /** Cambió una opción de la interfaz (imán, mover en altura, proyecto). */
   options: void;
+  /** Cambió el entorno (habitación). */
+  room: void;
 }
 type EventName = keyof StoreEvents;
 type Listener<E extends EventName> = (data: StoreEvents[E]) => void;
@@ -35,6 +39,7 @@ interface Saved {
   cfg?: Partial<DeskConfig>;
   proj?: Partial<Project>;
   cam?: Partial<CameraSettings>;
+  camV?: number;
 }
 
 function readSaved(): Saved | null {
@@ -107,7 +112,7 @@ export class Store {
       this.room = saved.room ?? null;
       if (saved.cfg) Object.assign(this.cfg, saved.cfg);
       if (saved.proj) Object.assign(this.proj, saved.proj);
-      if (saved.cam) Object.assign(this.cam, saved.cam);
+      if (saved.cam && saved.camV === CAM_VERSION) Object.assign(this.cam, saved.cam);
       for (const p of this.pieces) {
         const n = parseInt(String(p.id).slice(1), 10);
         if (n >= this.nextId) this.nextId = n + 1;
@@ -120,7 +125,7 @@ export class Store {
   }
   save(): void {
     try {
-      const data: Saved = { pieces: this.pieces, room: this.room, cfg: this.cfg, proj: this.proj, cam: this.cam };
+      const data: Saved = { pieces: this.pieces, room: this.room, cfg: this.cfg, proj: this.proj, cam: this.cam, camV: CAM_VERSION };
       localStorage.setItem(KEY, JSON.stringify(data));
     } catch { /* sin almacenamiento: el diseño vive solo en esta pestaña */ }
   }
@@ -170,6 +175,12 @@ export class Store {
   setProj(patch: Partial<Project>): void { Object.assign(this.proj, patch); this.save(); this.emit('options'); }
   setCfg(cfg: DeskConfig): void { this.cfg = cfg; this.save(); }
   toggle(key: 'snapOn' | 'vertOn'): void { this[key] = !this[key]; this.emit('options'); }
+  /** Cambia el entorno sin tocar las piezas. */
+  setRoom(room: Room | null, opts: { commit?: boolean } = {}): void {
+    this.room = room;
+    this.emit('room');
+    if (opts.commit !== false) this.commit(); else this.save();
+  }
   setCam(patch: Partial<CameraSettings>): void { Object.assign(this.cam, patch); this.save(); this.emit('options'); }
 }
 
