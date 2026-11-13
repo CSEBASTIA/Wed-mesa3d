@@ -1,0 +1,122 @@
+// Ventana "Escritorio a medida": formulario de medidas que genera el escritorio completo.
+import { useState } from 'react';
+import { MATS, MAT_KEYS } from '../core/catalog';
+import { DEFAULT_CFG, PRESETS, genTemplate, roomFromCfg, projectName } from '../core/templates';
+import { clamp } from '../core/format';
+import type { DeskConfig, DrawerSide, MatKey, Side, DeskShape } from '../core/types';
+import { store } from '../app/context';
+import { toast } from '../app/toast';
+import type { Viewport } from '../three/viewport';
+import { Modal } from './Modal';
+import { SelectField } from './fields';
+
+type NumKey = 'a' | 'b' | 'c' | 'd' | 't' | 'r' | 'n' | 'rw' | 'rd';
+/** En el formulario los números se guardan como texto para poder escribir libremente. */
+type Draft = Omit<DeskConfig, NumKey> & Record<NumKey, string>;
+
+const NUM_LIMITS: Record<NumKey, [number, number]> = {
+  a: [40, 400], b: [40, 400], c: [30, 120], d: [40, 120], t: [1, 6], r: [0, 80], n: [1, 6], rw: [60, 1000], rd: [60, 1000]
+};
+const NUM_KEYS = Object.keys(NUM_LIMITS) as NumKey[];
+
+function toDraft(c: DeskConfig): Draft {
+  const d = { ...c } as unknown as Draft;
+  for (const k of NUM_KEYS) d[k] = String(c[k]);
+  return d;
+}
+function fromDraft(d: Draft): DeskConfig {
+  const c = { ...d } as unknown as DeskConfig;
+  for (const k of NUM_KEYS) {
+    const v = parseFloat(d[k]);
+    c[k] = Number.isFinite(v) ? clamp(v, ...NUM_LIMITS[k]) : DEFAULT_CFG[k];
+  }
+  c.n = Math.round(c.n);
+  if (c.shape === 'L') c.c = Math.min(c.c, Math.min(c.a, c.b) - 15);
+  if (c.shape === 'L' && c.caj === 'ambas') c.caj = 'izq';
+  return c;
+}
+
+const MAT_OPTIONS = MAT_KEYS.map((k): [MatKey, string] => [k, MATS[k].name]);
+
+export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | null; onClose: () => void }) {
+  const [f, setF] = useState<Draft>(() => toDraft(store.cfg));
+  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setF((prev) => ({ ...prev, [k]: v }));
+  const L = f.shape === 'L';
+
+  const cajOptions: [DrawerSide, string][] = [['izq', 'Izquierda'], ['der', 'Derecha'],
+    ...(L ? [] : [['ambas', 'Ambos lados']] as [DrawerSide, string][]), ['no', 'Sin cajonera']];
+
+  const num = (k: NumKey, label: string) => (
+    <div className="field">
+      <label htmlFor={'t-' + k}>{label}</label>
+      <input id={'t-' + k} type="number" step={k === 'n' || k === 'a' || k === 'b' || k === 'c' ? 1 : 0.5}
+        min={NUM_LIMITS[k][0]} max={NUM_LIMITS[k][1]} value={f[k]} onChange={(e) => set(k, e.target.value)} />
+    </div>
+  );
+
+  const create = () => {
+    const cfg = fromDraft(f);
+    store.setCfg(cfg);
+    store.setProj({ name: projectName(cfg) });
+    store.replaceAll(genTemplate(cfg, () => store.newId()), roomFromCfg(cfg));
+    viewport?.setView('iso');
+    onClose();
+    toast('Escritorio creado. Deshacer recupera el diseño anterior.');
+  };
+
+  return (
+    <Modal title="Escritorio a medida" onClose={onClose}>
+      <p className="lead">Escribe las medidas y se arma el escritorio completo con tablero, soportes, faldones y cajonera. Después puedes mover o cambiar cualquier pieza.</p>
+      <div>
+        <p className="sub" style={{ marginBottom: 6 }}>Modelos de partida</p>
+        <div className="presets">
+          {PRESETS.map((pr) => (
+            <button key={pr.label} className="btn" type="button"
+              onClick={() => setF(toDraft({ ...DEFAULT_CFG, ...pr.cfg, mt: f.mt, ms: f.ms }))}>{pr.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="row2">
+        <SelectField<DeskShape> id="t-shape" label="Forma" value={f.shape}
+          options={[['L', 'En L (esquinero)'], ['recto', 'Recto']]} onChange={(v) => set('shape', v)} />
+        {L && <SelectField<Side> id="t-corner" label="Esquina hacia" value={f.corner}
+          options={[['izq', 'Izquierda'], ['der', 'Derecha']]} onChange={(v) => set('corner', v)} />}
+      </div>
+
+      <p className="sub">Medidas (cm)</p>
+      <div className="row3 tpl">
+        {num('a', L ? 'a · Largo trasero' : 'a · Largo')}
+        {L && num('b', 'b · Largo lateral')}
+        {num('c', 'c · Fondo')}
+        {num('d', 'd · Altura total')}
+        {num('t', 'Grosor tablero')}
+        {L && num('r', 'Radio de la curva')}
+      </div>
+
+      <div className="row3 tpl">
+        <SelectField<DrawerSide> id="t-caj" label="Cajonera" value={!L || f.caj !== 'ambas' ? f.caj : 'izq'}
+          options={cajOptions} onChange={(v) => set('caj', v)} />
+        {f.caj !== 'no' && num('n', 'Cajones')}
+        <SelectField<MatKey> id="t-mt" label="Material tablero" value={f.mt} options={MAT_OPTIONS} onChange={(v) => set('mt', v)} />
+        <SelectField<MatKey> id="t-ms" label="Material estructura" value={f.ms} options={MAT_OPTIONS} onChange={(v) => set('ms', v)} />
+      </div>
+
+      <label className="check">
+        <input type="checkbox" id="t-room" checked={f.room} onChange={(e) => set('room', e.target.checked)} />
+        Mostrar las paredes de la habitación
+      </label>
+      {f.room && (
+        <div className="row2">
+          {num('rw', 'Pared trasera (cm)')}
+          {num('rd', 'Pared lateral (cm)')}
+        </div>
+      )}
+
+      <div className="foot">
+        <button className="btn" onClick={onClose}>Cancelar</button>
+        <button className="btn primary" onClick={create}>Crear escritorio</button>
+      </div>
+    </Modal>
+  );
+}

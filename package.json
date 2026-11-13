@@ -1,9 +1,27 @@
 {
   "name": "wed-mesa3d",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Editor 3D para diseñar escritorios a medida y exportar el plano para el carpintero.",
   "private": true,
+  "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "dev": "vite --port 5173",
+    "start": "vite --port 5173",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 5173"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "three": "0.150.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@types/three": "0.150.2",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
   }
 }

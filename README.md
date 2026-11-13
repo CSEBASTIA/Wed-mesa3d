@@ -6,50 +6,64 @@ Editor 3D en el navegador para diseñar escritorios a medida y mandarle el plano
 - **Piezas sueltas:** tableros, tablero en L, paneles, estantes, faldones, patas, cajonera y cajones.
 - **Exportar plano (JPG/PNG):** vista 3D con cotas a/b/c/d, vista superior a escala y despiece completo.
 
+Hecho con **TypeScript**, **React 18**, **three.js** y **Vite**.
+
 ## Cómo ejecutarlo
 
-Necesitas [Node.js](https://nodejs.org). No hay dependencias que instalar.
+Necesitas [Node.js](https://nodejs.org) 18 o más reciente.
 
 ```bash
-npm start
+npm install
+npm run dev
 ```
 
 Luego abre http://localhost:5173
 
+| Comando | Qué hace |
+| --- | --- |
+| `npm run dev` | Servidor de desarrollo con recarga al guardar |
+| `npm run typecheck` | Revisa los tipos de TypeScript |
+| `npm run build` | Revisa tipos y genera la versión final en `dist/` |
+| `npm run preview` | Sirve la versión final para probarla |
+
 ## Arquitectura
 
 ```
-index.html            estructura de la página
-css/styles.css        estilos (tokens de color claro/oscuro)
-js/
-  main.js             punto de entrada: crea todo y lo conecta
-  utils/format.js     números, redondeos, nombres de archivo
-  core/               datos y reglas, sin DOM ni three.js
-    catalog.js        tipos de pieza, materiales, límites
-    geometry.js       cajas, contorno en L, huellas, cotas
-    templates.js      generador de escritorios a medida
-    cutlist.js        despiece para el carpintero
-    actions.js        agregar, duplicar, girar, apoyar...
-    store.js          estado único + historial + guardado + eventos
-  three/              todo lo que dibuja en 3D
-    materials.js      texturas y materiales
-    builders.js       pieza del modelo -> mallas
-    viewport.js       escena, cámara, paredes, selección, foto para exportar
-    interaction.js    arrastrar piezas con imán
-  ui/                 paneles, ventanas y teclado
-  export/sheet.js     lámina del plano (canvas)
+index.html                 punto de entrada de Vite
+src/
+  main.tsx                 monta React
+  App.tsx                  composición de la pantalla
+  styles.css               estilos (tokens de color claro/oscuro)
+  core/                    modelo y reglas: TypeScript puro, sin React ni three.js
+    types.ts               tipos: Piece, Room, DeskConfig, Dim...
+    catalog.ts             tipos de pieza, materiales, límites
+    geometry.ts            cajas, contorno en L, huellas, cotas
+    templates.ts           generador de escritorios a medida
+    cutlist.ts             despiece para el carpintero
+    actions.ts             agregar, duplicar, girar, apoyar...
+    store.ts               estado único + historial + guardado + eventos tipados
+  three/                   todo lo que dibuja en 3D
+    materials.ts           texturas y materiales
+    builders.ts            pieza del modelo -> mallas
+    viewport.ts            clase Viewport: escena, cámara, paredes, selección, foto para exportar
+    interaction.ts         arrastrar piezas con imán
+  export/sheet.ts          lámina del plano (canvas)
+  app/                     puente con React: store compartido, avisos, atajos de teclado
+  components/              componentes React: barra, catálogo, escena, ficha, lista, ventanas
 ```
 
-**Flujo de datos:** la interfaz y el arrastre llaman a `store` (o a `actions`); el `store` cambia el modelo,
-guarda en `localStorage`, apila el historial y emite eventos (`reset`, `added`, `removed`, `rebuilt`, `moved`,
-`select`, `history`). La vista 3D y los paneles solo escuchan esos eventos. Nada en `core/` sabe de la pantalla,
-así que se puede reutilizar en un servidor o en pruebas.
+**Flujo de datos:** los componentes y el arrastre llaman a `store` (o a `actions`). El `store` cambia el modelo,
+lo guarda en `localStorage`, apila el historial y emite eventos tipados (`reset`, `added`, `removed`, `rebuilt`,
+`moved`, `select`, `history`, `options`). El `Viewport` 3D escucha esos eventos y React se vuelve a dibujar con
+`useSyncExternalStore`. Nada en `core/` sabe de la pantalla, así que se puede reutilizar en un servidor
+(guardar diseños, cotizar) o en pruebas.
 
 ### Agregar un tipo de pieza
 
-1. Declararlo en `js/core/catalog.js` (`TYPES`).
-2. Construir su malla en `js/three/builders.js`.
-3. Si se fabrica con varias tablas, describir su despiece en `js/core/cutlist.js`.
+1. Agregar su nombre a `PieceType` en `src/core/types.ts`.
+2. Declararlo en `TYPES` (`src/core/catalog.ts`). TypeScript avisa si falta.
+3. Construir su malla en `src/three/builders.ts`.
+4. Si se fabrica con varias tablas, describir su despiece en `src/core/cutlist.ts`.
 
 ## Controles
 
@@ -57,5 +71,3 @@ así que se puede reutilizar en un servidor o en pruebas.
 - Arrastra el fondo para girar la vista; la rueda acerca y aleja.
 - Doble clic en un cajón para abrirlo o cerrarlo.
 - Flechas: mover · R: girar · Supr: eliminar · Ctrl+Z / Ctrl+Y: deshacer / rehacer.
-
-Hecho con [three.js](https://threejs.org).
