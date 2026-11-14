@@ -2,9 +2,17 @@
 
 Editor 3D en el navegador para diseñar escritorios a medida y mandarle el plano al carpintero.
 
-- **Entorno:** cuarto, sala u oficina con medidas, piso, color de paredes, puertas y ventanas. Las paredes que tapan la vista se recortan solas.
-- **Escritorio a medida:** en L (esquinero) o recto, con cajonera; se arma en la esquina del entorno.
-- **Piezas sueltas:** tableros, tablero en L, paneles, estantes, faldones, patas, cajonera y cajones.
+- **Entorno:** cuarto, sala u oficina con la forma real de la habitación (rectangular, en L, en U o la que dibujes
+  arrastrando esquinas y paredes), piso, color de paredes, puertas y ventanas. Las paredes que tapan la vista se recortan solas.
+- **Escritorio a medida:** en L (esquinero) o recto, con cajonera; se arma en la esquina del entorno y se pueden agregar varios.
+  Sus medidas se editan como un solo escritorio y se actualizan en tiempo real.
+- **Materiales y presupuesto:** melaminas, MDF, contrachapado y maderas macizas con precio por m²; presupuesto con
+  tablas, cantos, herrajes y mano de obra, y comparación de acabados (económico, estándar, premium, lujo).
+- **Mini tutorial** guiado la primera vez (y con el botón "?").
+- **32 piezas sueltas** en 4 categorías, con buscador: tableros y paneles (travesaño, panel divisor…), patas y soportes
+  (cónica, torneada, horquilla, caballete, en U, marco cerrado, trapecio, en X, escuadra de pared), almacenamiento
+  (cajonera con ruedas, archivador, módulo con puerta, librero, nicho, repisa superior) y accesorios (bandeja de teclado,
+  porta CPU, elevador de monitor, reposapiés, bandeja de cables, pasacables).
 - **Exportar plano (JPG/PNG):** vista 3D con cotas a/b/c/d, vista superior a escala y despiece completo.
 
 Hecho con **TypeScript**, **React 18**, **three.js** y **Vite**.
@@ -62,9 +70,9 @@ lo guarda en `localStorage`, apila el historial y emite eventos tipados (`reset`
 ### Agregar un tipo de pieza
 
 1. Agregar su nombre a `PieceType` en `src/core/types.ts`.
-2. Declararlo en `TYPES` (`src/core/catalog.ts`). TypeScript avisa si falta.
-3. Construir su malla en `src/three/builders.ts`.
-4. Si se fabrica con varias tablas, describir su despiece en `src/core/cutlist.ts`.
+2. Declararlo en `TYPES` (`src/core/catalog.ts`) con su categoría, medidas y material por defecto.
+3. Describir sus partes en `src/core/parts.ts` (cajas, cilindros o conos, con su giro y herrajes).
+   De esa descripción salen solos el 3D, el despiece, el presupuesto y la miniatura de la biblioteca.
 
 ## Controles
 

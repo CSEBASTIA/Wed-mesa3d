@@ -4,8 +4,8 @@ import { bounds, footprint, getDims, mainTop, box, addVec } from '../core/geomet
 import { cutList } from '../core/cutlist';
 import { fmt } from '../core/format';
 import type { Store } from '../core/store';
-import type { Piece, Room, Vec2, Vec3, WallSide } from '../core/types';
-import { WALL_SIDES, WALL_T, clampOpening, normalizeRoom, roomBounds, wallFrame, wallSegments } from '../core/room';
+import type { Piece, Room, Vec2, Vec3 } from '../core/types';
+import { WALL_T, clampOpening, isRect, normalizeRoom, onWallPoint, roomBounds, walls, wallSegments } from '../core/room';
 import type { Viewport } from '../three/viewport';
 
 type Ctx = CanvasRenderingContext2D;
@@ -78,19 +78,19 @@ function drawPlan(ctx: Ctx, X: number, Y: number, W: number, H: number, { pieces
   const P = (x: number, z: number): Vec2 => [ox + x * k, oz + z * k];
 
   if (R && rb) {
-    const r0 = P(rb.x0, rb.z0), r1 = P(rb.x1, rb.z1);
-    ctx.fillStyle = '#f4f2ed'; ctx.fillRect(r0[0], r0[1], r1[0] - r0[0], r1[1] - r0[1]);
-    // punto sobre una pared: u a lo largo, n hacia afuera
-    const onWall = (side: WallSide, u: number, n: number): Vec2 => {
-      const f = wallFrame(R, side);
-      return P(f.start[0] + f.dir[0] * u + f.out[0] * n, f.start[1] + f.dir[1] * u + f.out[1] * n);
-    };
+    // piso con la forma exacta
+    ctx.beginPath();
+    R.points.forEach(([x, z], i) => { const p = P(x, z); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); });
+    ctx.closePath(); ctx.fillStyle = '#f4f2ed'; ctx.fill();
     ctx.lineCap = 'butt';
-    for (const side of WALL_SIDES) {
+    for (const wall of walls(R)) {
+      const side = wall.i;
+      // punto sobre esta pared: u a lo largo, n hacia afuera
+      const onWall = (u: number, n: number): Vec2 => { const q = onWallPoint(wall, u, n); return P(q[0], q[1]); };
       // muros (solo los tramos que llegan al piso; bajo las ventanas se dibuja más claro)
       for (const [a, b, lo, hi] of wallSegments(R, side)) {
         if (lo > 0) continue;
-        const p1 = onWall(side, a, WALL_T / 2), p2 = onWall(side, b, WALL_T / 2);
+        const p1 = onWall(a, WALL_T / 2), p2 = onWall(b, WALL_T / 2);
         ctx.strokeStyle = hi >= R.h - 0.5 ? '#4b4f55' : '#9a9ea4'; ctx.lineWidth = WALL_T * k;
         ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
       }
@@ -98,16 +98,16 @@ function drawPlan(ctx: Ctx, X: number, Y: number, W: number, H: number, { pieces
         const o = clampOpening(R, o0);
         if (o.type === 'ventana') {
           ctx.strokeStyle = '#ffffff'; ctx.lineWidth = WALL_T * k * 0.5;
-          const a = onWall(side, o.pos, WALL_T / 2), b = onWall(side, o.pos + o.width, WALL_T / 2);
+          const a = onWall(o.pos, WALL_T / 2), b = onWall(o.pos + o.width, WALL_T / 2);
           ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
           ctx.strokeStyle = '#4b4f55'; ctx.lineWidth = 1.5;
           for (const n of [WALL_T * 0.3, WALL_T * 0.7]) {
-            const c = onWall(side, o.pos, n), d = onWall(side, o.pos + o.width, n);
+            const c = onWall(o.pos, n), d = onWall(o.pos + o.width, n);
             ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
           }
         } else {
           // puerta: hoja abierta hacia adentro y arco de abatimiento
-          const hinge = onWall(side, o.pos, 0), end = onWall(side, o.pos + o.width, 0), leaf = onWall(side, o.pos, -o.width);
+          const hinge = onWall(o.pos, 0), end = onWall(o.pos + o.width, 0), leaf = onWall(o.pos, -o.width);
           ctx.strokeStyle = '#4b4f55'; ctx.lineWidth = 2.5;
           ctx.beginPath(); ctx.moveTo(hinge[0], hinge[1]); ctx.lineTo(leaf[0], leaf[1]); ctx.stroke();
           ctx.lineWidth = 1.5; ctx.setLineDash([7, 6]);
@@ -118,11 +118,16 @@ function drawPlan(ctx: Ctx, X: number, Y: number, W: number, H: number, { pieces
         }
       }
     }
-    ctx.font = '500 24px ' + FB; ctx.fillStyle = GREY; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    const bc = P((rb.x0 + rb.x1) / 2, rb.z0 - WALL_T); ctx.fillText('Pared ' + fmt(R.w) + ' cm', bc[0], bc[1] - 48);
-    ctx.save(); const sx = s > 0 ? rb.x0 - WALL_T : rb.x1 + WALL_T, scn = P(sx, (rb.z0 + rb.z1) / 2);
-    ctx.translate(scn[0] - s * 52, scn[1]); ctx.rotate(-s * Math.PI / 2);
-    ctx.fillText('Pared ' + fmt(R.d) + ' cm', 0, 0); ctx.restore();
+    // largo de cada pared, por fuera y alineado con ella (como en un plano de arquitecto)
+    ctx.font = '500 21px ' + FB; ctx.fillStyle = GREY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const wall of walls(R)) {
+      if (wall.len < 25) continue;
+      const q = onWallPoint(wall, wall.len / 2, WALL_T + 22 / k), p = P(q[0], q[1]);
+      let ang = Math.atan2(wall.dir[1], wall.dir[0]);
+      if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI; // que no quede de cabeza
+      ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(ang);
+      ctx.fillText(fmt(wall.len) + ' cm', 0, 0); ctx.restore();
+    }
   }
 
   for (const p of [...pieces].sort((a, b) => (a.y + a.h) - (b.y + b.h))) {
@@ -150,14 +155,14 @@ function drawPlan(ctx: Ctx, X: number, Y: number, W: number, H: number, { pieces
     else label(ctx, txt, mx, my, 22);
   }
 
-  if (room) {
-    const extX = s > 0 ? B.x1 : -B.x0, extZ = B.z1;
-    const freeX = room.w - extX, freeZ = room.d - extZ;
+  // espacio libre junto a las paredes (solo en habitaciones rectangulares, donde se lee sin ambigüedad)
+  if (R && rb && isRect(R)) {
+    const freeX = s > 0 ? rb.x1 - B.x1 : B.x0 - rb.x0, freeZ = rb.z1 - B.z1;
     const freeText = (f: number) => (f < 0 ? 'No entra: sobran ' + fmt(-f) + ' cm' : fmt(f) + ' cm libres');
     ctx.font = '600 24px ' + FB; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const fx = P(s * (extX + room.w) / 2, 40);
+    const fx = P(s > 0 ? (B.x1 + rb.x1) / 2 : (B.x0 + rb.x0) / 2, rb.z0 + 40);
     ctx.fillStyle = freeX < 0 ? '#c0352b' : '#2e6b3a'; ctx.fillText(freeText(freeX), fx[0], fx[1]);
-    ctx.save(); const fz = P(s * 40, (extZ + room.d) / 2); ctx.translate(fz[0], fz[1]); ctx.rotate(-s * Math.PI / 2);
+    ctx.save(); const fz = P(s > 0 ? rb.x0 + 40 : rb.x1 - 40, (B.z1 + rb.z1) / 2); ctx.translate(fz[0], fz[1]); ctx.rotate(-s * Math.PI / 2);
     ctx.fillStyle = freeZ < 0 ? '#c0352b' : '#2e6b3a'; ctx.fillText(freeText(freeZ), 0, 0); ctx.restore();
   }
 
