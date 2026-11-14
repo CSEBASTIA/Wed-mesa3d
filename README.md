@@ -47,7 +47,10 @@ Ya implementado en esta versión:
   (cónica, torneada, horquilla, caballete, en U, marco cerrado, trapecio, en X, escuadra de pared), almacenamiento
   (cajonera con ruedas, archivador, módulo con puerta, librero, nicho, repisa superior) y accesorios (bandeja de teclado,
   porta CPU, elevador de monitor, reposapiés, bandeja de cables, pasacables).
-- **Exportar plano (JPG/PNG):** vista 3D con cotas a/b/c/d, vista superior a escala y despiece completo.
+- **Exportar plano (JPG/PNG):** vista 3D con cotas a/b/c/d, vista superior a escala, las 4 vistas ortogonales
+  (frente, atrás, arriba y abajo) con sus cotas y medidas generales, y despiece completo.
+- **Proyectos guardados:** varios diseños con nombre, fecha y miniatura; abrir, duplicar, renombrar, eliminar,
+  y exportar o importar como archivo `.json` para respaldarlos o llevarlos a otra computadora.
 
 Hecho con **TypeScript**, **React 18**, **three.js** y **Vite**.
 
@@ -86,6 +89,7 @@ src/
     collide.ts             colisión de las piezas con las paredes
     parts.ts               piezas compuestas: partes de cada pieza (3D, despiece, costo, miniatura)
     budget.ts              presupuesto: materiales, herrajes, mano de obra y acabados
+    projects.ts            proyectos guardados: guardar, abrir, importar y exportar
     cutlist.ts             despiece para el carpintero
     actions.ts             agregar, duplicar, girar, apoyar...
     store.ts               estado único + historial + guardado + eventos tipados
@@ -123,4 +127,5 @@ lo guarda en `localStorage`, apila el historial y emite eventos tipados (`reset`
 - Botón **Cámara**: velocidad del teclado y sensibilidad del giro y del zoom (se guardan en el navegador).
 - Doble clic en un cajón activo para abrirlo o cerrarlo.
 - Los paneles laterales se minimizan con el botón de su esquina.
-- Flechas: mover · Supr: eliminar · Ctrl+Z / Ctrl+Y: deshacer / rehacer.
+- Flechas: mover · Supr: eliminar · Ctrl+Z / Ctrl+Y: deshacer / rehacer · **Ctrl+S: guardar el proyecto**.
+- Clic en el nombre de la barra superior: ventana **Proyectos**.

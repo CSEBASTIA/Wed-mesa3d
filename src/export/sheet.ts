@@ -6,7 +6,7 @@ import { fmt } from '../core/format';
 import type { Store } from '../core/store';
 import type { Piece, Room, Vec2, Vec3 } from '../core/types';
 import { WALL_T, clampOpening, isRect, normalizeRoom, onWallPoint, roomBounds, walls, wallSegments } from '../core/room';
-import type { Viewport } from '../three/viewport';
+import type { OrthoView, Viewport } from '../three/viewport';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -189,6 +189,62 @@ function drawPlan(ctx: Ctx, X: number, Y: number, W: number, H: number, { pieces
   ctx.fillText('50 cm', sx0 + len + 12, sy0);
 }
 
+/* ---------------------------------------------------------------- vistas ortogonales */
+
+const VIEWS: { v: OrthoView; name: string; plan: boolean }[] = [
+  { v: 'front', name: 'Frente', plan: false },
+  { v: 'back', name: 'Atrás', plan: false },
+  { v: 'top', name: 'Arriba', plan: true },
+  { v: 'bottom', name: 'Abajo', plan: true }
+];
+export const VIEWS_H = 600;
+
+/** Cota recta con marcas en los extremos y la medida en una etiqueta al centro. */
+function straightDim(ctx: Ctx, x1: number, y1: number, x2: number, y2: number, text: string): void {
+  const vertical = Math.abs(x2 - x1) < 1;
+  ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  for (const [x, y] of [[x1, y1], [x2, y2]]) {
+    ctx.beginPath();
+    if (vertical) { ctx.moveTo(x - 9, y); ctx.lineTo(x + 9, y); } else { ctx.moveTo(x, y - 9); ctx.lineTo(x, y + 9); }
+    ctx.stroke();
+  }
+  label(ctx, text, (x1 + x2) / 2, (y1 + y2) / 2, 21);
+}
+
+/**
+ * Fila con las 4 vistas ortogonales (frente, atrás, arriba, abajo), a escala, con sus cotas
+ * y sus medidas generales anotadas debajo de cada una.
+ */
+function drawViews(ctx: Ctx, vp: Viewport, X: number, Y: number, W: number, size: { sx: number; sy: number; sz: number }): void {
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = INK; ctx.font = '600 32px ' + FD;
+  ctx.fillText('Vistas', X, Y + 32);
+  ctx.font = '400 22px ' + FB; ctx.fillStyle = GREY; ctx.fillText('Proyección ortogonal, a escala, en cm', X + 120, Y + 32);
+  const gap = 24, pw = (W - gap * 3) / 4, imgY = Y + 56, imgH = 420;
+  VIEWS.forEach(({ v, name, plan }, i) => {
+    const px = X + i * (pw + gap);
+    const shot = vp.orthoSnapshot(v, Math.round(pw - 4), imgH - 4);
+    ctx.strokeStyle = HAIR; ctx.lineWidth = 2; ctx.strokeRect(px, imgY, pw, imgH);
+    ctx.drawImage(shot.img, px + 2, imgY + 2);
+    // contorno del mueble en la imagen (está centrado y a escala k)
+    const cx = px + pw / 2, cy = imgY + imgH / 2, hw = (shot.across * shot.k) / 2, hh = (shot.tall * shot.k) / 2;
+    straightDim(ctx, cx - hw, cy + hh + 26, cx + hw, cy + hh + 26, fmt(shot.across));
+    straightDim(ctx, cx + hw + 26, cy - hh, cx + hw + 26, cy + hh, fmt(shot.tall));
+    // nombre de la vista y medidas generales debajo
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = INK; ctx.font = '600 26px ' + FD; ctx.fillText(name, px, imgY + imgH + 40);
+    ctx.fillStyle = GREY; ctx.font = '400 21px ' + FB;
+    const second = plan ? 'Fondo ' + fmt(size.sz) : 'Alto ' + fmt(size.sy);
+    ctx.fillText('Ancho ' + fmt(size.sx) + ' cm  ·  ' + second + ' cm', px, imgY + imgH + 72);
+  });
+  // medidas generales del mueble completo
+  const gy = imgY + imgH + 116;
+  ctx.fillStyle = '#f5f6f7'; ctx.fillRect(X, gy - 30, W, 46);
+  ctx.fillStyle = INK; ctx.font = '600 23px ' + FB; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('Medidas generales:  ancho ' + fmt(size.sx) + ' cm  ·  alto ' + fmt(size.sy) + ' cm  ·  fondo ' + fmt(size.sz) + ' cm', X + 18, gy - 7);
+  ctx.textBaseline = 'alphabetic';
+}
+
 /** Genera la lámina completa como canvas. */
 export function makeSheet(store: Store, vp: Viewport): HTMLCanvasElement {
   const { pieces, room, proj } = store;
@@ -196,7 +252,8 @@ export function makeSheet(store: Store, vp: Viewport): HTMLCanvasElement {
   const rows = cutList(pieces), rowH = 46;
   const meas = document.createElement('canvas').getContext('2d')!; meas.font = '400 24px ' + FB;
   const noteLines = proj.notes ? wrapText(meas, proj.notes, W - 2 * M - 40) : [];
-  const tableY = top + panelH + 70;
+  const viewsY = top + panelH + 50;
+  const tableY = viewsY + VIEWS_H + 50;
   const Ht = tableY + 70 + rows.length * rowH + (noteLines.length ? 70 + noteLines.length * 34 : 0) + 110;
 
   const cv = document.createElement('canvas'); cv.width = W; cv.height = Ht;
@@ -243,6 +300,7 @@ export function makeSheet(store: Store, vp: Viewport): HTMLCanvasElement {
     });
 
     drawPlan(ctx, rightX, top, rightW, panelH, { pieces, room, showChair: proj.chair });
+    drawViews(ctx, vp, M, viewsY, W - 2 * M, { sx: B.sx, sy: B.y1, sz: B.sz });
   }
 
   // despiece
