@@ -1,10 +1,21 @@
 // Tipos del modelo. Medidas en cm. X = izquierda/derecha, Y = altura, Z = atrás/frente.
 
 export type PieceType =
-  | 'tablero' | 'tableroL' | 'lateral' | 'estante' | 'faldon'
-  | 'pata' | 'patar' | 'cajonera' | 'cajon';
+  // tableros y paneles
+  | 'tablero' | 'tableroL' | 'lateral' | 'estante' | 'faldon' | 'travesano' | 'biombo'
+  // patas y soportes
+  | 'pata' | 'patar' | 'pataConica' | 'pataTorneada' | 'horquilla' | 'caballete' | 'marcoU' | 'marcoO'
+  | 'trapecio' | 'baseX' | 'escuadra'
+  // almacenamiento
+  | 'cajonera' | 'cajoneraMovil' | 'archivador' | 'gabinete' | 'librero' | 'nicho' | 'hutch' | 'cajon'
+  // accesorios
+  | 'bandejaTeclado' | 'soporteCPU' | 'elevadorMonitor' | 'reposapies' | 'canaleta' | 'pasacables';
 
-export type MatKey = 'roble' | 'nogal' | 'pino' | 'blanco' | 'gris' | 'negro' | 'metal';
+export type MatKey =
+  | 'blanco' | 'gris' | 'negro' | 'roble' | 'nogal'          // melaminas
+  | 'mdf' | 'contrachapado'                                   // tableros
+  | 'pino' | 'roble-macizo' | 'nogal-macizo'                  // maderas macizas
+  | 'metal' | 'acero-negro';                                  // metal
 
 export type Vec3 = [number, number, number];
 export type Vec2 = [number, number];
@@ -35,6 +46,16 @@ export interface Piece {
   zoc?: number;
   /** Cajón suelto: abierto. */
   open?: boolean;
+  /** Escritorio al que pertenece (piezas generadas por "Escritorio a medida"). */
+  kit?: string;
+}
+
+/** Escritorio generado: sus medidas y dónde está su esquina de origen. Cambiar la configuración rearma sus piezas. */
+export interface Kit {
+  id: string;
+  cfg: DeskConfig;
+  ox: number;
+  oz: number;
 }
 
 export type PieceTemplate = Omit<Piece, 'id' | 'type' | 'x' | 'y' | 'z' | 'rot'>;
@@ -54,7 +75,8 @@ export type FloorKind = 'madera' | 'roble-claro' | 'ceramica' | 'alfombra' | 'ce
 /** Puerta o ventana en una pared. `pos` se mide desde el extremo izquierdo de la pared (visto desde dentro). */
 export interface Opening {
   id: string;
-  wall: WallSide;
+  /** Índice de la pared (tramo del contorno). Las versiones viejas guardaban 'trasera', 'izquierda'... */
+  wall: number | WallSide;
   type: OpeningType;
   pos: number;
   width: number;
@@ -71,6 +93,11 @@ export interface Room {
   w: number;
   d: number;
   corner: Side;
+  /**
+   * Contorno interior en planta [x, z], en orden. Cada tramo entre dos esquinas es una pared.
+   * Si falta, la habitación es un rectángulo de w × d.
+   */
+  points?: Vec2[];
   /** Alto de las paredes. */
   h?: number;
   kind?: RoomKind;

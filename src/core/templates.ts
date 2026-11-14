@@ -1,7 +1,8 @@
 // Plantillas de escritorio a medida: a partir de unas pocas medidas genera todas las piezas.
 import { T } from './catalog';
 import { fmt } from './format';
-import type { DeskConfig, MatKey, Piece, PieceType, Room } from './types';
+import type { DeskConfig, Kit, MatKey, Piece, PieceType, Room } from './types';
+import { roomBounds } from './room';
 
 export const DEFAULT_CFG: DeskConfig = {
   shape: 'L', corner: 'izq', a: 120, b: 160, c: 60, d: 75.5, t: 2.5, r: 20, caj: 'izq', n: 3,
@@ -61,6 +62,22 @@ export function genTemplate(cfg: DeskConfig, newId: () => string): Piece[] {
     if (lf > 5) L.push(mk('faldon', 'Faldón trasero', lf, 30, T, le + lf / 2, fy, 1.5 + T / 2, 0, ms));
   }
   return L.map((p) => ({ ...p, id: newId() }));
+}
+
+/**
+ * Arma las piezas de un escritorio agrupado: genera la plantilla, la lleva a su origen y la marca con el kit.
+ * Los identificadores son estables (kit-1, kit-2...) para que la selección sobreviva al rearmar.
+ */
+export function buildKit(kit: Kit): Piece[] {
+  let n = 0;
+  return genTemplate(kit.cfg, () => kit.id + '-' + (++n)).map((p) => ({ ...p, x: p.x + kit.ox, z: p.z + kit.oz, kit: kit.id }));
+}
+
+/** Esquina de la habitación donde se arma el escritorio (o el origen si no hay habitación). */
+export function kitOrigin(cfg: DeskConfig, room: Room | null): { ox: number; oz: number } {
+  if (!room) return { ox: 0, oz: 0 };
+  const b = roomBounds(room), corner = cfg.shape === 'L' ? cfg.corner : 'izq';
+  return { ox: corner === 'der' ? b.x1 : b.x0, oz: b.z0 };
 }
 
 export function roomFromCfg(cfg: DeskConfig): Room | null {

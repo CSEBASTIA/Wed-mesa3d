@@ -2,11 +2,14 @@
 import { T, matOf, MATS } from './catalog';
 import { cajoneraFronts, lRadius } from './geometry';
 import { fmt } from './format';
+import { compose, partMat, HW_NAMES, type HwKey } from './parts';
 import type { CutRow, Piece, PieceTemplate } from './types';
 
 /** Texto corto de medidas para listas. */
 export function pieceLabel(p: Piece | (PieceTemplate & { type: Piece['type'] })): string {
-  if (p.type === 'patar') return 'ø ' + fmt(p.w) + ' × ' + fmt(p.h);
+  if (p.type === 'patar' || p.type === 'pataConica' || p.type === 'pataTorneada') return 'ø ' + fmt(p.w) + ' × ' + fmt(p.h);
+  if (p.type === 'pasacables') return 'ø ' + fmt(p.w);
+  if ((p.type === 'cajoneraMovil') && p.n) return fmt(p.w) + ' × ' + fmt(p.h) + ' × ' + fmt(p.d) + ', ' + p.n + ' caj.';
   if (p.type === 'tableroL') return 'L ' + fmt(p.w) + ' × ' + fmt(p.d) + ', fondo ' + fmt(p.c ?? 60);
   if (p.type === 'cajonera') return fmt(p.w) + ' × ' + fmt(p.h) + ' × ' + fmt(p.d) + ', ' + (p.n ?? 3) + ' caj.';
   return fmt(p.w) + ' × ' + fmt(p.h) + ' × ' + fmt(p.d);
@@ -18,7 +21,36 @@ function md(a: number, b: number, c: number): string {
   return fmt(s[0]) + ' × ' + fmt(s[1]) + ' × ' + fmt(s[2]);
 }
 
+/** Despiece de una pieza compuesta: tablas, tubos, piezas torneadas y herrajes. */
+function composedRows(p: Piece): CutRow[] | null {
+  const comp = compose(p);
+  if (!comp) return null;
+  const out: CutRow[] = [];
+  for (const part of comp.parts) {
+    if (part.cut === false) continue;
+    const mat = matOf(partMat(part, p)), [w, h, d] = part.size;
+    const name = p.name + ' · ' + part.name.toLowerCase();
+    if (part.shape === 'cyl' || part.shape === 'cone') {
+      out.push({ name, q: 1, txt: (part.shape === 'cone' ? 'Cónica ø ' + fmt(w) + '→' + fmt(part.d2 ?? w) : 'ø ' + fmt(w)) + ' × ' + fmt(h) + ' de largo', mat: mat.name });
+    } else if (mat.family === 'metal') {
+      const s = [w, h, d].sort((x, y) => y - x);
+      const txt = s[2] < 1
+        ? 'Chapa ' + fmt(s[1]) + ' cm × ' + fmt(s[2] * 10) + ' mm, largo ' + fmt(s[0]) + ' cm'
+        : 'Perfil ' + fmt(s[1] * 10) + '×' + fmt(s[2] * 10) + ' mm, largo ' + fmt(s[0]) + ' cm';
+      out.push({ name, q: 1, txt, mat: mat.name });
+    } else {
+      out.push({ name, q: 1, txt: md(w, h, d), mat: mat.name });
+    }
+  }
+  for (const [k, q] of Object.entries(comp.hw ?? {}) as [HwKey, number][]) {
+    if (q) out.push({ name: HW_NAMES[k], q, txt: 'Herraje estándar', mat: 'Herraje' }); // se suman entre piezas
+  }
+  return out;
+}
+
 export function partsOf(p: Piece): CutRow[] {
+  const composed = composedRows(p);
+  if (composed) return composed;
   const m = matOf(p.mat).name, out: CutRow[] = [];
   const add = (name: string, q: number, txt: string, mat?: string) => out.push({ name, q, txt, mat: mat ?? m });
   switch (p.type) {
