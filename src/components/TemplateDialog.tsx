@@ -1,7 +1,8 @@
 // Ventana "Escritorio a medida": formulario de medidas que genera el escritorio completo.
 import { useState } from 'react';
 import { MATS, MAT_KEYS } from '../core/catalog';
-import { DEFAULT_CFG, PRESETS, genTemplate, roomFromCfg, projectName } from '../core/templates';
+import { DEFAULT_CFG, PRESETS, kitOrigin, roomFromCfg, projectName } from '../core/templates';
+import { bounds } from '../core/geometry';
 import { clamp } from '../core/format';
 import type { DeskConfig, DrawerSide, MatKey, Side, DeskShape } from '../core/types';
 import { store } from '../app/context';
@@ -42,6 +43,8 @@ const MAT_OPTIONS = MAT_KEYS.map((k): [MatKey, string] => [k, MATS[k].name]);
 export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | null; onClose: () => void }) {
   // con un entorno ya creado, por defecto se usa ese entorno (no se cambian sus medidas)
   const hasRoom = !!store.room;
+  const hasPieces = store.pieces.length > 0;
+  const [replace, setReplace] = useState(!hasRoom || !hasPieces);
   const [f, setF] = useState<Draft>(() => ({ ...toDraft(store.cfg), room: hasRoom ? false : store.cfg.room }));
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setF((prev) => ({ ...prev, [k]: v }));
   const L = f.shape === 'L';
@@ -59,23 +62,34 @@ export function TemplateDialog({ viewport, onClose }: { viewport: Viewport | nul
     const cfg = fromDraft(f);
     store.setCfg(cfg);
     store.setProj({ name: projectName(cfg) });
-    // El escritorio se arma en la esquina trasera de la habitación. Si ya hay un entorno se conserva su estilo
-    // (piso, paredes, puertas) y solo se ajusta la esquina; si se pidieron paredes nuevas, también sus medidas.
-    const corner = cfg.shape === 'L' ? cfg.corner : 'izq';
+    // El escritorio se arma en la esquina trasera de la habitación. Si se pidieron paredes nuevas, se conserva
+    // el estilo del entorno (piso, color) con un rectángulo de esas medidas.
     const fresh = roomFromCfg(cfg);
-    const room = fresh ? { ...(store.room ?? {}), ...fresh } : store.room ? { ...store.room, corner } : null;
-    store.replaceAll(genTemplate(cfg, () => store.newId()), room);
+    const room = fresh ? { ...(store.room ?? {}), ...fresh, points: undefined, openings: [] } : store.room;
+    const origin = kitOrigin(cfg, room);
+    if (!replace) {
+      // un escritorio más: delante de lo que ya hay, para que no se encimen
+      const B = bounds(store.pieces);
+      if (B) origin.oz = Math.max(origin.oz, B.z1 + 70);
+    }
+    store.addKit({ id: store.newKitId(), cfg, ...origin }, { replace, room });
     viewport?.setView('iso');
     onClose();
-    toast('Escritorio creado. Deshacer recupera el diseño anterior.');
+    toast(replace ? 'Escritorio creado. Deshacer recupera el diseño anterior.' : 'Escritorio agregado al diseño.');
   };
 
   return (
     <Modal title="Escritorio a medida" onClose={onClose}
       subtitle="Escribe las medidas y se arma el escritorio con tablero, soportes, faldones y cajonera. Después puedes ajustar cada pieza."
       footer={<>
+        {hasPieces && (
+          <div className="seg foot-seg" role="radiogroup" aria-label="Qué hacer con el diseño actual">
+            <button type="button" role="radio" aria-checked={!replace} onClick={() => setReplace(false)}>Agregar otro</button>
+            <button type="button" role="radio" aria-checked={replace} onClick={() => setReplace(true)}>Reemplazar diseño</button>
+          </div>
+        )}
         <button className="btn ghost" onClick={onClose}>Cancelar</button>
-        <button className="btn primary" onClick={create}>Crear escritorio</button>
+        <button className="btn primary" onClick={create}>{replace ? 'Crear escritorio' : 'Agregar escritorio'}</button>
       </>}>
 
       <div className="group">

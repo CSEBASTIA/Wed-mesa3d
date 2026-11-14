@@ -8,6 +8,8 @@ interface NumberFieldProps {
   label: ReactNode;
   value: number;
   onCommit: (v: number) => void;
+  /** Si se indica, se llama mientras se escribe para ver el cambio en tiempo real (sin guardar en el historial). */
+  onLive?: (v: number) => void;
   step?: number;
   min?: number;
   max?: number;
@@ -16,9 +18,10 @@ interface NumberFieldProps {
 
 /**
  * Campo numérico que se puede escribir libremente y aplica el valor al salir o con Enter.
+ * Con `onLive`, el modelo se actualiza en tiempo real mientras se escribe.
  * Mientras no tiene el foco, sigue al valor del modelo (por ejemplo al arrastrar la pieza).
  */
-export function NumberField({ id, label, value, onCommit, step = 0.5, min, max, unit = 'cm' }: NumberFieldProps) {
+export function NumberField({ id, label, value, onCommit, onLive, step = 0.5, min, max, unit = 'cm' }: NumberFieldProps) {
   const [draft, setDraft] = useState(show(value));
   const focused = useRef(false);
   useEffect(() => { if (!focused.current) setDraft(show(value)); }, [value]);
@@ -35,7 +38,12 @@ export function NumberField({ id, label, value, onCommit, step = 0.5, min, max, 
         <input
           id={id} type="number" inputMode="decimal" step={step} min={min} max={max} value={draft}
           onFocus={(e) => { focused.current = true; e.currentTarget.select(); }}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            const v = parseFloat(e.target.value);
+            // en tiempo real: solo valores razonables (al escribir "1" camino a "120" no se aplica un 1)
+            if (onLive && Number.isFinite(v) && (min == null || v >= min)) onLive(v);
+          }}
           onBlur={(e) => { focused.current = false; commit(e.currentTarget.value); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();

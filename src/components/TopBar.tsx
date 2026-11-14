@@ -7,6 +7,7 @@ interface TopBarProps {
   onExport: () => void;
   onCamera: () => void;
   onEnvironment: () => void;
+  onHelp: () => void;
 }
 
 function Tool({ icon, label, onClick, pressed, disabled, danger }: {
@@ -20,7 +21,7 @@ function Tool({ icon, label, onClick, pressed, disabled, danger }: {
   );
 }
 
-export function TopBar({ onExport, onCamera, onEnvironment }: TopBarProps) {
+export function TopBar({ onExport, onCamera, onEnvironment, onHelp }: TopBarProps) {
   useStoreVersion();
   const clear = () => {
     if (!store.pieces.length) return;
@@ -48,13 +49,16 @@ export function TopBar({ onExport, onCamera, onEnvironment }: TopBarProps) {
       </div>
 
       <div className="actions-r">
+        <button className="icon-btn float" title="Tutorial" aria-label="Ver el tutorial" onClick={onHelp}>
+          <Icon name="help" />
+        </button>
         <button className="icon-btn float" title="Entorno: cuarto, sala u oficina" aria-label="Entorno" onClick={onEnvironment}>
           <Icon name="home" />
         </button>
         <button className="icon-btn float" title="Cámara y sensibilidad" aria-label="Cámara y sensibilidad" onClick={onCamera}>
           <Icon name="sliders" />
         </button>
-        <button className="btn primary lg" onClick={onExport}>
+        <button className="btn primary lg" data-tour="export" onClick={onExport}>
           <Icon name="download" /><span className="lbl">Exportar plano</span>
         </button>
       </div>

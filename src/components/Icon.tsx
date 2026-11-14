@@ -28,7 +28,8 @@ const PATHS = {
   showRight: ['M3 4h18v16H3z', 'M15 4v16', 'm11 9-3 3 3 3'],
   home: ['M3 11 12 4l9 7', 'M5 10v10h14V10', 'M10 20v-6h4v6'],
   door: ['M6 21V3h12v18', 'M3 21h18', 'M14 12h.01'],
-  window: ['M4 4h16v16H4z', 'M12 4v16', 'M4 12h16']
+  window: ['M4 4h16v16H4z', 'M12 4v16', 'M4 12h16'],
+  help: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z', 'M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3', 'M12 17h.01']
 } as const;
 
 export type IconName = keyof typeof PATHS;

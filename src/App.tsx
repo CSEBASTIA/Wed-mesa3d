@@ -16,8 +16,9 @@ import { ExportDialog } from './components/ExportDialog';
 import { CameraDialog } from './components/CameraDialog';
 import { EnvironmentDialog } from './components/EnvironmentDialog';
 import { Icon } from './components/Icon';
+import { Tour, tutorialSeen } from './components/Tour';
 
-type Dialog = 'template' | 'export' | 'camera' | 'environment' | null;
+type Dialog = 'template' | 'export' | 'camera' | 'environment' | 'tour' | null;
 
 const PANELS_KEY = 'taller-paneles';
 function readPanels(): { left: boolean; right: boolean } {
@@ -27,7 +28,8 @@ function readPanels(): { left: boolean; right: boolean } {
 
 export function App() {
   const [viewport, setViewport] = useState<Viewport | null>(null);
-  const [dialog, setDialog] = useState<Dialog>(null);
+  // la primera vez se abre el tutorial
+  const [dialog, setDialog] = useState<Dialog>(() => (tutorialSeen() ? null : 'tour'));
   const [panels, setPanels] = useState(readPanels);
   const close = useCallback(() => setDialog(null), []);
   const onReady = useCallback((vp: Viewport | null) => setViewport(vp), []);
@@ -47,7 +49,8 @@ export function App() {
   return (
     <div className={'app' + (panels.left ? '' : ' no-left') + (panels.right ? '' : ' no-right')}>
       <Stage onReady={onReady} />
-      <TopBar onExport={openExport} onCamera={openCamera} onEnvironment={() => setDialog('environment')} />
+      <TopBar onExport={openExport} onCamera={openCamera} onEnvironment={() => setDialog('environment')}
+        onHelp={() => { setPanels({ left: true, right: true }); setDialog('tour'); }} />
       {panels.left
         ? <LibraryPanel onTemplate={() => setDialog('template')} onEnvironment={() => setDialog('environment')} onCollapse={() => toggle('left')} />
         : <button className="panel-tab float left" title="Mostrar biblioteca" aria-label="Mostrar biblioteca" onClick={() => toggle('left')}>
@@ -63,6 +66,7 @@ export function App() {
       {dialog === 'export' && viewport && <ExportDialog viewport={viewport} onClose={close} />}
       {dialog === 'camera' && <CameraDialog onClose={close} />}
       {dialog === 'environment' && <EnvironmentDialog viewport={viewport} onClose={close} />}
+      {dialog === 'tour' && <Tour onClose={close} />}
     </div>
   );
 }

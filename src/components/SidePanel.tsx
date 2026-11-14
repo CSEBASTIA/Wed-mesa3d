@@ -4,9 +4,10 @@ import { matOf } from '../core/catalog';
 import { cutList, pieceLabel } from '../core/cutlist';
 import { store, useStoreVersion } from '../app/context';
 import { Inspector } from './Inspector';
+import { BudgetPanel } from './BudgetPanel';
 import { Icon } from './Icon';
 
-type Tab = 'pieza' | 'piezas' | 'despiece';
+type Tab = 'pieza' | 'piezas' | 'despiece' | 'costo';
 
 export function SidePanel({ onExport, onCollapse }: { onExport: () => void; onCollapse: () => void }) {
   useStoreVersion();
@@ -19,11 +20,11 @@ export function SidePanel({ onExport, onCollapse }: { onExport: () => void; onCo
   const totalParts = rows.reduce((n, r) => n + (r.mat === 'Herraje' ? 0 : r.q), 0);
 
   const tabs: [Tab, string, number | null][] = [
-    ['pieza', 'Pieza', null], ['piezas', 'Piezas', store.pieces.length], ['despiece', 'Despiece', null]
+    ['pieza', 'Pieza', null], ['piezas', 'Piezas', store.pieces.length], ['despiece', 'Cortes', null], ['costo', 'Costo', null]
   ];
 
   return (
-    <aside className="panel right float edge-r" aria-label="Detalle">
+    <aside className="panel right float edge-r" aria-label="Detalle" data-tour="panel-right">
       <div className="tabs-row">
         <div className="tabs" role="tablist">
           {tabs.map(([t, label, count]) => (
@@ -67,6 +68,8 @@ export function SidePanel({ onExport, onCollapse }: { onExport: () => void; onCo
             </div>
           ) : <p className="note" style={{ padding: 8 }}>El despiece aparece cuando agregas piezas.</p>
         )}
+
+        {tab === 'costo' && <BudgetPanel />}
       </div>
 
       {tab === 'despiece' && rows.length > 0 && (

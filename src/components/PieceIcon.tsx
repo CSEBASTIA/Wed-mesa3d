@@ -1,5 +1,9 @@
 // Miniaturas isométricas de cada tipo de pieza, dibujadas en SVG a partir de cajas 3D.
-import type { PieceType } from '../core/types';
+// Las piezas compuestas (core/parts.ts) se dibujan solas a partir de sus partes reales, con giros incluidos.
+import { useMemo } from 'react';
+import { TYPES, matOf } from '../core/catalog';
+import { compose, partMat } from '../core/parts';
+import type { Piece, PieceType } from '../core/types';
 
 type V3 = [number, number, number];
 interface Block { at: V3; size: V3; wood?: boolean; lines?: number }
@@ -8,7 +12,7 @@ const C = Math.cos(Math.PI / 6), S = 0.5;
 const iso = ([x, y, z]: V3): [number, number] => [(x - z) * C, (x + z) * S - y];
 
 /** Formas simplificadas por tipo (unidades libres; x a lo ancho, y alto, z fondo). */
-const SHAPES: Record<PieceType, Block[]> = {
+const SHAPES: Partial<Record<PieceType, Block[]>> = {
   tablero: [{ at: [0, 0, 0], size: [12, 0.9, 6], wood: true }],
   tableroL: [
     { at: [0, 0, 0], size: [12, 0.9, 4], wood: true },
@@ -98,9 +102,72 @@ const ROOM: Block[] = [
 
 export type IconShape = PieceType | 'deskL' | 'deskRecto' | 'room';
 
+/* ---------- piezas compuestas: caras de cajas giradas, ordenadas por profundidad ---------- */
+
+const FACES = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+
+function rotate([x, y, z]: V3, [rx, ry, rz]: V3): V3 {
+  // mismo orden que three.js (Euler XYZ): primero z, luego y, luego x
+  let c = Math.cos(rz), s = Math.sin(rz); [x, y] = [x * c - y * s, x * s + y * c];
+  c = Math.cos(ry); s = Math.sin(ry); [x, z] = [x * c + z * s, -x * s + z * c];
+  c = Math.cos(rx); s = Math.sin(rx); [y, z] = [y * c - z * s, y * s + z * c];
+  return [x, y, z];
+}
+
+function ComposedIcon({ type }: { type: PieceType }) {
+  const data = useMemo(() => {
+    const t = TYPES[type];
+    const p: Piece = { id: 'icon', type, name: t.name, w: t.w, h: t.h, d: t.d, x: 0, y: 0, z: 0, rot: 0, mat: t.mat, n: t.n, zoc: t.zoc };
+    const comp = compose(p);
+    const faces: { pts: [number, number][]; depth: number; cls: string }[] = [];
+    if (comp) {
+      for (const part of comp.parts) {
+        const [w, h, d] = part.size, round = part.shape === 'cyl' || part.shape === 'cone';
+        const bottom = part.shape === 'cone' ? (part.d2 ?? w) / w : 1;
+        const m = matOf(partMat(part, p)), kind = m.metal ? 'metal ' : m.wood ? 'wood ' : '';
+        const corners: V3[] = [];
+        for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+          const k = sy < 0 ? bottom : 1;
+          const local: V3 = [sx * w / 2 * k, sy * h / 2, sz * (round ? w : d) / 2 * k];
+          const r = part.rot ? rotate(local, part.rot) : local;
+          corners.push([r[0] + part.at[0], r[1] + part.at[1], r[2] + part.at[2]]);
+        }
+        for (const f of FACES) {
+          const q = f.map((i) => corners[i]);
+          const u = [q[1][0] - q[0][0], q[1][1] - q[0][1], q[1][2] - q[0][2]];
+          const v = [q[3][0] - q[0][0], q[3][1] - q[0][1], q[3][2] - q[0][2]];
+          const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+          if (n[0] + n[1] + n[2] <= 1e-6) continue; // de espaldas al observador
+          const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
+          const shade = ay >= ax && ay >= az ? 't' : az >= ax ? 'l' : 'r';
+          const depth = q.reduce((s, c) => s + c[0] + c[1] + c[2], 0) / 4;
+          faces.push({ pts: q.map(iso), depth, cls: kind + shade });
+        }
+      }
+    }
+    faces.sort((a, b) => a.depth - b.depth);
+    const xs = faces.flatMap((f) => f.pts.map((p2) => p2[0])), ys = faces.flatMap((f) => f.pts.map((p2) => p2[1]));
+    const minX = Math.min(...xs), minY = Math.min(...ys), W = Math.max(...xs) - minX, H = Math.max(...ys) - minY;
+    const pad = Math.max(W, H) * 0.06;
+    return { faces, viewBox: `${minX - pad} ${minY - pad} ${W + 2 * pad} ${H + 2 * pad}` };
+  }, [type]);
+  return (
+    <svg className="iso" viewBox={data.viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      {data.faces.map((f, i) => <path key={i} className={f.cls} d={'M' + f.pts.map((q) => q[0].toFixed(2) + ' ' + q[1].toFixed(2)).join('L') + 'Z'} />)}
+    </svg>
+  );
+}
+
 export function PieceIcon({ type }: { type: IconShape }) {
   if (type === 'patar') return <RoundLeg />;
-  const blocks = type === 'deskL' ? DESK_L : type === 'deskRecto' ? DESK_RECTO : type === 'room' ? ROOM : SHAPES[type];
+  if (type !== 'deskL' && type !== 'deskRecto' && type !== 'room' && !SHAPES[type]) {
+    if (compose({ ...TYPES[type], id: '', type, x: 0, y: 0, z: 0, rot: 0 })) return <ComposedIcon type={type} />;
+    // pieza simple sin dibujo propio: una caja con sus proporciones
+    const t = TYPES[type], k = 10 / Math.max(t.w, t.h, t.d);
+    const { viewBox, shapes } = render([{ at: [0, 0, 0], size: [t.w * k, t.h * k, t.d * k], wood: matOf(t.mat).wood }]);
+    return <svg className="iso" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true">{shapes}</svg>;
+  }
+  const blocks = type === 'deskL' ? DESK_L : type === 'deskRecto' ? DESK_RECTO : type === 'room' ? ROOM : SHAPES[type]!;
   const { viewBox, shapes } = render(blocks);
   return <svg className="iso" viewBox={viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true">{shapes}</svg>;
 }
