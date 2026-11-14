@@ -8,6 +8,8 @@ interface TopBarProps {
   onCamera: () => void;
   onEnvironment: () => void;
   onHelp: () => void;
+  onProjects: () => void;
+  onSave: () => void;
 }
 
 function Tool({ icon, label, onClick, pressed, disabled, danger }: {
@@ -21,7 +23,7 @@ function Tool({ icon, label, onClick, pressed, disabled, danger }: {
   );
 }
 
-export function TopBar({ onExport, onCamera, onEnvironment, onHelp }: TopBarProps) {
+export function TopBar({ onExport, onCamera, onEnvironment, onHelp, onProjects, onSave }: TopBarProps) {
   useStoreVersion();
   const clear = () => {
     if (!store.pieces.length) return;
@@ -31,11 +33,20 @@ export function TopBar({ onExport, onCamera, onEnvironment, onHelp }: TopBarProp
   return (
     <header className="topbar">
       <div className="brand float">
-        <div className="brand-mark"><BrandMark /></div>
-        <div className="brand-text">
-          <b>Taller de Escritorios</b>
-          <span>{store.proj.name || 'Sin nombre'}</span>
-        </div>
+        <button className="brand-btn" onClick={onProjects} title="Proyectos: guardar y abrir diseños">
+          <div className="brand-mark"><BrandMark /></div>
+          <div className="brand-text">
+            <b>Taller de Escritorios</b>
+            <span>
+              {store.proj.name || 'Sin nombre'}
+              {store.dirty && <em className="unsaved-dot" title="Cambios sin guardar"> · sin guardar</em>}
+            </span>
+          </div>
+        </button>
+        <button className="icon-btn" title={store.projectId ? 'Guardar cambios (Ctrl+S)' : 'Guardar proyecto (Ctrl+S)'}
+          aria-label="Guardar proyecto" onClick={onSave}>
+          <Icon name="save" />
+        </button>
       </div>
 
       <div className="toolgroup float" role="toolbar" aria-label="Edición">

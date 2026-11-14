@@ -17,8 +17,10 @@ import { CameraDialog } from './components/CameraDialog';
 import { EnvironmentDialog } from './components/EnvironmentDialog';
 import { Icon } from './components/Icon';
 import { Tour, tutorialSeen } from './components/Tour';
+import { ProjectsDialog } from './components/ProjectsDialog';
+import { saveCurrent } from './app/projectActions';
 
-type Dialog = 'template' | 'export' | 'camera' | 'environment' | 'tour' | null;
+type Dialog = 'template' | 'export' | 'camera' | 'environment' | 'tour' | 'projects' | null;
 
 const PANELS_KEY = 'taller-paneles';
 function readPanels(): { left: boolean; right: boolean } {
@@ -34,6 +36,19 @@ export function App() {
   const close = useCallback(() => setDialog(null), []);
   const onReady = useCallback((vp: Viewport | null) => setViewport(vp), []);
   useShortcuts(dialog === null);
+
+  // Guardar: si el proyecto ya existe, se guarda directo; si no, se abre la ventana para ponerle nombre
+  const save = useCallback(() => {
+    if (store.projectId) saveCurrent(viewport, store.proj.name);
+    else setDialog('projects');
+  }, [viewport]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [save]);
   // con la ventana de cámara abierta se puede probar el movimiento mientras se ajusta
   useCameraKeys(viewport, dialog === null || dialog === 'camera');
   useViewInsets(viewport, panels);
@@ -50,7 +65,8 @@ export function App() {
     <div className={'app' + (panels.left ? '' : ' no-left') + (panels.right ? '' : ' no-right')}>
       <Stage onReady={onReady} />
       <TopBar onExport={openExport} onCamera={openCamera} onEnvironment={() => setDialog('environment')}
-        onHelp={() => { setPanels({ left: true, right: true }); setDialog('tour'); }} />
+        onHelp={() => { setPanels({ left: true, right: true }); setDialog('tour'); }}
+        onProjects={() => setDialog('projects')} onSave={save} />
       {panels.left
         ? <LibraryPanel onTemplate={() => setDialog('template')} onEnvironment={() => setDialog('environment')} onCollapse={() => toggle('left')} />
         : <button className="panel-tab float left" title="Mostrar biblioteca" aria-label="Mostrar biblioteca" onClick={() => toggle('left')}>
@@ -67,6 +83,7 @@ export function App() {
       {dialog === 'camera' && <CameraDialog onClose={close} />}
       {dialog === 'environment' && <EnvironmentDialog viewport={viewport} onClose={close} />}
       {dialog === 'tour' && <Tour onClose={close} />}
+      {dialog === 'projects' && <ProjectsDialog viewport={viewport} onClose={close} />}
     </div>
   );
 }

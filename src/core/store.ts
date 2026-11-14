@@ -5,6 +5,7 @@ import { normalizeRoom, roomBounds } from './room';
 import { clone } from './format';
 import { defaultPrices, mergePrices, type PriceList } from './budget';
 import type { CameraSettings, DeskConfig, Kit, MatKey, Piece, Project, Room } from './types';
+import type { DesignData } from './projects';
 
 export const DEFAULT_CAMERA: CameraSettings = { move: 90, rotate: 0.5, zoom: 0.6 };
 /** Versión de los ajustes de cámara: al cambiar los valores por defecto se descartan los guardados. */
@@ -44,6 +45,9 @@ interface Saved {
   camV?: number;
   kits?: Record<string, Kit>;
   prices?: Partial<PriceList>;
+  /** Proyecto guardado que está abierto, y si hay cambios desde el último guardado. */
+  projectId?: string | null;
+  dirty?: boolean;
 }
 
 function readSaved(): Saved | null {
@@ -76,6 +80,10 @@ export class Store {
   kits: Record<string, Kit> = {};
   /** Precios del presupuesto (por material y extras). */
   prices: PriceList = defaultPrices();
+  /** Proyecto guardado que está abierto (null si el diseño aún no se guardó). */
+  projectId: string | null = null;
+  /** Hay cambios que no se guardaron en el proyecto. */
+  dirty = false;
 
   /** Aumenta con cada evento: React lo usa para saber cuándo volver a dibujar. */
   version = 0;
@@ -123,6 +131,7 @@ export class Store {
       if (saved.cam && saved.camV === CAM_VERSION) Object.assign(this.cam, saved.cam);
       if (saved.kits) this.kits = saved.kits;
       if (saved.prices) this.prices = mergePrices(saved.prices);
+      this.projectId = saved.projectId ?? null;
       for (const id of [...this.pieces.map((p) => p.id), ...Object.keys(this.kits)]) {
         const n = parseInt(String(id).slice(1), 10);
         if (n >= this.nextId) this.nextId = n + 1;
@@ -135,6 +144,49 @@ export class Store {
     this.recenter();
     this.emit('reset');
     this.commit();
+    this.dirty = saved?.dirty ?? false;
+    this.save();
+  }
+
+  /* ---- proyectos ---- */
+  /** Todo lo que define el diseño actual (para guardarlo como proyecto). */
+  snapshot(): DesignData {
+    return clone({ pieces: this.pieces, room: this.room, kits: this.kits, cfg: this.cfg, proj: this.proj, prices: this.prices });
+  }
+  /**
+   * Abre un diseño (proyecto guardado, importado o nuevo). Reemplaza todo y empieza un historial nuevo,
+   * para que "deshacer" no vuelva al proyecto anterior.
+   */
+  loadDesign(data: DesignData, projectId: string | null): void {
+    this.pieces = clone(data.pieces);
+    this.room = data.room ? clone(data.room) : null;
+    this.kits = clone(data.kits ?? {});
+    this.cfg = { ...clone(DEFAULT_CFG), ...(data.cfg ?? {}) };
+    const baseProj: Project = { name: 'Proyecto', client: '', notes: '', chair: true };
+    this.proj = { ...baseProj, ...data.proj };
+    if (data.prices) this.prices = mergePrices(data.prices);
+    this.projectId = projectId;
+    this.selId = null;
+    for (const id of [...this.pieces.map((p) => p.id), ...Object.keys(this.kits)]) {
+      const n = parseInt(String(id).slice(1), 10);
+      if (n >= this.nextId) this.nextId = n + 1;
+    }
+    this.history = []; this.hIndex = -1;
+    this.recenter();
+    this.emit('reset'); this.emit('select'); this.commit();
+    this.dirty = false; this.save(); this.emit('options');
+  }
+  /** El proyecto abierto se borró: el diseño sigue en pantalla, pero ya no está guardado. */
+  detachProject(): void {
+    this.projectId = null; this.dirty = true;
+    this.save(); this.emit('options');
+  }
+  /** Marca el diseño como guardado en el proyecto indicado. */
+  markSaved(projectId: string, name: string): void {
+    this.projectId = projectId;
+    this.proj = { ...this.proj, name };
+    this.dirty = false;
+    this.save(); this.emit('options');
   }
 
   /**
@@ -154,7 +206,7 @@ export class Store {
   save(): void {
     try {
       const data: Saved = { pieces: this.pieces, room: this.room, cfg: this.cfg, proj: this.proj, cam: this.cam, camV: CAM_VERSION,
-        kits: this.kits, prices: this.prices };
+        kits: this.kits, prices: this.prices, projectId: this.projectId, dirty: this.dirty };
       localStorage.setItem(KEY, JSON.stringify(data));
     } catch { /* sin almacenamiento: el diseño vive solo en esta pestaña */ }
   }
@@ -163,6 +215,7 @@ export class Store {
     this.history.push(JSON.stringify({ pieces: this.pieces, room: this.room, kits: this.kits }));
     if (this.history.length > MAX_HISTORY) this.history.shift();
     this.hIndex = this.history.length - 1;
+    this.dirty = true;
     this.save();
     this.emit('history');
   }

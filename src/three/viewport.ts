@@ -21,6 +21,11 @@ const ACCEL = 9;
 
 export interface ProjectedDim { k: string; v: number; txt: string; a: Vec2; b: Vec2; ao: Vec2; bo: Vec2 }
 export interface Snapshot { img: HTMLCanvasElement; dims: ProjectedDim[] }
+
+/** Vistas ortogonales del plano. */
+export type OrthoView = 'front' | 'back' | 'top' | 'bottom';
+/** Foto ortogonal: imagen, escala (px por cm) y medidas del mueble en esa vista (ancho y alto en pantalla, cm). */
+export interface OrthoShot { img: HTMLCanvasElement; k: number; across: number; tall: number }
 export interface PickHit { id: string; point: THREE.Vector3 }
 
 const V = (a: Vec3) => new THREE.Vector3(a[0], a[1], a[2]);
@@ -294,6 +299,83 @@ export class Viewport {
   /** ¿El puntero está sobre el aro de giro? */
   pickRing(e: PointerEvent | MouseEvent): boolean {
     return this.ring.visible && this.rayFromEvent(e).intersectObject(this.ring, false).length > 0;
+  }
+
+  /**
+   * Miniatura del diseño para la lista de proyectos: vista 3D encuadrada (la habitación entera si hay),
+   * sin selección ni aro, en JPEG. No mueve la cámara del usuario.
+   */
+  thumbnail(w = 320, h = 200): string {
+    const { camera, scene, renderer } = this;
+    const saved = { pos: camera.position.clone(), quat: camera.quaternion.clone(), aspect: camera.aspect,
+      size: renderer.getSize(new THREE.Vector2()), outline: this.outline.visible, ring: this.ring.visible };
+    let c: THREE.Vector3, r: number;
+    if (this.store.room) {
+      const rb = roomBounds(this.store.room);
+      c = new THREE.Vector3((rb.x0 + rb.x1) / 2, 60, (rb.z0 + rb.z1) / 2);
+      r = Math.max(rb.x1 - rb.x0, rb.z1 - rb.z0) * 0.62;
+    } else {
+      const si = sceneInfo(this.store.pieces);
+      c = V(si.center); r = Math.max(si.r * 0.75, 60);
+    }
+    const dir = new THREE.Vector3(0.62 * cornerSide(this.store.pieces), 0.7, 0.82).normalize();
+    camera.clearViewOffset();
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    camera.position.copy(c).add(dir.multiplyScalar(r / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))));
+    camera.lookAt(c); camera.updateMatrixWorld();
+    this.outline.visible = false; this.ring.visible = false;
+    this.room.update(camera);
+    renderer.setPixelRatio(1); renderer.setSize(w, h, false);
+    renderer.render(scene, camera);
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d')!.drawImage(this.el, 0, 0, w, h);
+    const url = cv.toDataURL('image/jpeg', 0.72);
+    // restaurar la vista del usuario
+    renderer.setPixelRatio(this.pr); renderer.setSize(saved.size.x, saved.size.y, false);
+    camera.aspect = saved.aspect; this.applyOffset();
+    camera.position.copy(saved.pos); camera.quaternion.copy(saved.quat); camera.updateMatrixWorld();
+    this.outline.visible = saved.outline; this.ring.visible = saved.ring;
+    this.room.update(camera);
+    return url;
+  }
+
+  /**
+   * Vista ortogonal limpia del mueble (sin perspectiva), para el plano: frente, atrás, arriba o abajo.
+   * El mueble queda centrado y a escala; se devuelve la escala para poder acotar sobre la imagen.
+   */
+  orthoSnapshot(view: OrthoView, w: number, h: number): OrthoShot {
+    const { scene, renderer } = this;
+    const B = bounds(this.store.pieces)!;
+    const c = new THREE.Vector3((B.x0 + B.x1) / 2, B.y1 / 2, (B.z0 + B.z1) / 2);
+    const plan = view === 'top' || view === 'bottom';
+    const across = B.sx, tall = plan ? B.sz : B.y1;
+    const k = Math.min((w * 0.74) / Math.max(across, 1), (h * 0.72) / Math.max(tall, 1));
+    const cam = new THREE.OrthographicCamera(-w / 2 / k, w / 2 / k, h / 2 / k, -h / 2 / k, 1, 5000);
+    const D = 2000;
+    if (view === 'front') cam.position.set(c.x, c.y, c.z + D);
+    if (view === 'back') cam.position.set(c.x, c.y, c.z - D);
+    if (view === 'top') { cam.position.set(c.x, c.y + D, c.z); cam.up.set(0, 0, -1); }
+    if (view === 'bottom') { cam.position.set(c.x, c.y - D, c.z); cam.up.set(0, 0, -1); }
+    cam.lookAt(c); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+
+    const saved = { bg: scene.background, size: renderer.getSize(new THREE.Vector2()), floor: this.floor.visible };
+    scene.background = new THREE.Color('#ffffff');
+    if (this.grid) this.grid.visible = false;
+    this.outline.visible = false; this.ring.visible = false; this.room.setVisible(false); this.floor.visible = false;
+    edgeMat.opacity = 0.8; edgeMat.color.set(0x2a2e33);
+    renderer.setPixelRatio(1); renderer.setSize(w, h, false);
+    renderer.render(scene, cam);
+    const img = document.createElement('canvas'); img.width = w; img.height = h;
+    img.getContext('2d')!.drawImage(this.el, 0, 0, w, h);
+
+    renderer.setPixelRatio(this.pr); renderer.setSize(saved.size.x, saved.size.y, false);
+    scene.background = saved.bg;
+    if (this.grid) this.grid.visible = true;
+    this.room.setVisible(true); this.floor.visible = saved.floor;
+    edgeMat.opacity = 0.22; edgeMat.color.set(0x000000);
+    this.camera.updateProjectionMatrix();
+    this.refreshOutline();
+    return { img, k, across, tall };
   }
 
   /** Foto limpia para la exportación (fondo blanco, bordes marcados) y cotas proyectadas a la imagen. */
