@@ -1,0 +1,6 @@
+# Saltos de línea: LF en el repositorio y en la copia de trabajo (evita los avisos LF/CRLF en Windows)
+* text=auto eol=lf
+
+# Archivos generados: no cuentan en las estadísticas de lenguajes de GitHub
+package-lock.json linguist-generated=true
+dist/** linguist-generated=true
