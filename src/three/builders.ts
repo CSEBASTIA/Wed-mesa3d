@@ -4,6 +4,7 @@ import { T } from '../core/catalog';
 import { lShape, cajoneraFronts } from '../core/geometry';
 import type { Piece, PieceType } from '../core/types';
 import { material, edgeMat } from './materials';
+import { compose, partMat } from '../core/parts';
 
 function part(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
   const geo = new THREE.BoxGeometry(Math.max(w, 0.1), Math.max(h, 0.1), Math.max(d, 0.1));
@@ -64,10 +65,34 @@ const builders: Partial<Record<PieceType, Builder>> = {
 
 const fallback: Builder = (g, p, mat) => { g.add(part(p.w, p.h, p.d, mat)); };
 
+/** Piezas compuestas (core/parts.ts): cada parte es una caja, un cilindro o un cono. */
+function buildComposed(g: THREE.Group, p: Piece): boolean {
+  const comp = compose(p);
+  if (!comp) return false;
+  for (const part of comp.parts) {
+    const mat = material(partMat(part, p));
+    const [w, h, d] = part.size;
+    let mesh: THREE.Mesh;
+    if (part.shape === 'cyl' || part.shape === 'cone') {
+      const geo = new THREE.CylinderGeometry(w / 2, (part.shape === 'cone' ? part.d2 ?? w : w) / 2, h, 28);
+      mesh = new THREE.Mesh(geo, mat);
+      mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 40), edgeMat));
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.position.set(...part.at);
+    } else {
+      mesh = part3(w, h, d, mat, part.at);
+    }
+    if (part.rot) mesh.rotation.set(...part.rot);
+    g.add(mesh);
+  }
+  return true;
+}
+const part3 = (w: number, h: number, d: number, mat: THREE.Material, at: [number, number, number]) => part(w, h, d, mat, at[0], at[1], at[2]);
+
 /** @param prev grupo anterior de la misma pieza (para conservar animaciones) */
 export function buildPiece(p: Piece, prev?: THREE.Group): THREE.Group {
   const g = new THREE.Group();
-  (builders[p.type] ?? fallback)(g, p, material(p.mat), prev);
+  if (!buildComposed(g, p)) (builders[p.type] ?? fallback)(g, p, material(p.mat), prev);
   g.userData.id = p.id;
   return g;
 }

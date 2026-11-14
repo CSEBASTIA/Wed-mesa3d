@@ -6,6 +6,8 @@ import type { Store } from '../core/store';
 import type { Box, Piece } from '../core/types';
 import type { Viewport } from './viewport';
 import { normRot } from '../core/actions';
+import { constrainMove, fitsInRoom, pointInPolygon, wallSnapBoxes } from '../core/collide';
+import { normalizeRoom } from '../core/room';
 
 const MAGNET = 2.5; // cm
 
@@ -83,8 +85,11 @@ export function attachInteraction(vp: Viewport, store: Store): () => void {
       let deg = (spin.rot0 * 90) + THREE.MathUtils.radToDeg(a - spin.a0);
       // con el imán, saltos de 15°; sin imán (o con Alt), giro libre
       if (store.snapOn && !e.altKey) deg = Math.round(deg / SNAP_DEG) * SNAP_DEG;
+      const rot = normRot(deg / 90);
+      // al girar tampoco puede atravesar una pared
+      if (store.room && pointInPolygon(normalizeRoom(store.room).points, [p.x, p.z]) && !fitsInRoom(store.room, { ...p, rot })) return;
       spin.moved = true;
-      store.update(p.id, { rot: normRot(deg / 90) }, { geometry: false, commit: false });
+      store.update(p.id, { rot }, { geometry: false, commit: false });
       return;
     }
     if (!drag) {
@@ -100,7 +105,8 @@ export function attachInteraction(vp: Viewport, store: Store): () => void {
     if (!vp.rayFromEvent(e).ray.intersectPlane(plane, hit)) return;
     const p = store.byId(drag.id); if (!p) return;
     const b = box(p);
-    const others = store.snapOn ? store.pieces.filter((o) => o.id !== p.id).map(box) : [];
+    // el imán también se pega a las paredes del cuarto
+    const others = store.snapOn ? [...store.pieces.filter((o) => o.id !== p.id).map(box), ...wallSnapBoxes(store.room)] : [];
     const patch: Partial<Piece> = {};
     if (drag.vertical) {
       let y = hit.y + drag.oy;
@@ -112,7 +118,9 @@ export function attachInteraction(vp: Viewport, store: Store): () => void {
         x = magnet(r5(x), -b.sx / 2, b.sx / 2, others, 'x0', 'x1');
         z = magnet(r5(z), -b.sz / 2, b.sz / 2, others, 'z0', 'z1');
       }
-      patch.x = clamp(x, -1500, 1500); patch.z = clamp(z, -1500, 1500);
+      // colisión: no atravesar las paredes (se desliza a lo largo de ellas)
+      const c = constrainMove(store.room, p, clamp(x, -1500, 1500), clamp(z, -1500, 1500));
+      patch.x = c.x; patch.z = c.z;
     }
     drag.moved = true;
     store.update(p.id, patch, { geometry: false, commit: false });

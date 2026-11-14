@@ -25,6 +25,9 @@ export interface PickHit { id: string; point: THREE.Vector3 }
 
 const V = (a: Vec3) => new THREE.Vector3(a[0], a[1], a[2]);
 
+/** Fondo "estudio" cuando no hay habitación: cian grisáceo suave (menos brillante que el blanco), cuadrícula con poco contraste. */
+const STUDIO = { bg: '#cfe1e5', gridA: '#a9c3ca', gridB: '#bed4d9' };
+
 export class Viewport {
   readonly el: HTMLCanvasElement;
   readonly camera = new THREE.PerspectiveCamera(40, 1, 1, 6000);
@@ -99,8 +102,8 @@ export class Viewport {
   private listen(): void {
     const s = this.store;
     this.cleanups.push(
-      s.on('reset', () => { this.syncAll(); this.room.build(s.room); this.refreshOutline(); this.applyCamera(); }),
-      s.on('room', () => this.room.build(s.room)),
+      s.on('reset', () => { this.syncAll(); this.room.build(s.room); this.refreshOutline(); this.applyCamera(); this.applyTheme(); }),
+      s.on('room', () => { this.room.build(s.room); this.applyTheme(); }),
       s.on('options', () => this.applyCamera()),
       s.on('added', (p) => { this.syncPiece(p); this.refreshOutline(); }),
       s.on('rebuilt', (p) => { this.syncPiece(p); this.refreshOutline(); }),
@@ -150,10 +153,16 @@ export class Viewport {
   /* ---------- tema y tamaño ---------- */
   private applyTheme = (): void => {
     const css = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-    this.scene.background = new THREE.Color(css('--scene-bg') || '#dfe5ea');
+    // Sin habitación: estudio gris muy claro con cuadrícula suave (cómodo para la vista en cualquier tema).
+    // Con habitación: el fondo del tema, para que el cuarto resalte.
+    const studio = !this.store.room;
+    this.scene.background = new THREE.Color(studio ? STUDIO.bg : css('--scene-bg') || '#dfe5ea');
     if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); (this.grid.material as THREE.Material).dispose(); }
-    this.grid = new THREE.GridHelper(1000, 100, new THREE.Color(css('--grid-a') || '#aab5c0'), new THREE.Color(css('--grid-b') || '#c9d1d9'));
+    this.grid = studio
+      ? new THREE.GridHelper(1000, 100, new THREE.Color(STUDIO.gridA), new THREE.Color(STUDIO.gridB))
+      : new THREE.GridHelper(1000, 100, new THREE.Color(css('--grid-a') || '#aab5c0'), new THREE.Color(css('--grid-b') || '#c9d1d9'));
     this.grid.position.y = 0.02; this.scene.add(this.grid);
+    this.floor.material.opacity = studio ? 0.16 : 0.22;
     const accent = css('--accent') || '#a8682f';
     (this.outline.material as THREE.LineBasicMaterial).color.set(accent);
     this.ring.material.color.set(accent);
@@ -320,7 +329,7 @@ export class Viewport {
     scene.background = saved.bg;
     if (this.grid) this.grid.visible = true;
     this.room.setVisible(true);
-    edgeMat.opacity = 0.22; edgeMat.color.set(0x000000); this.floor.material.opacity = 0.22;
+    edgeMat.opacity = 0.22; edgeMat.color.set(0x000000); this.floor.material.opacity = this.store.room ? 0.22 : 0.16;
     this.refreshOutline();
     return { img, dims: projected };
   }

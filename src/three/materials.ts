@@ -30,7 +30,7 @@ export function material(key: MatKey): THREE.MeshStandardMaterial {
   const t = new THREE.CanvasTexture(c);
   t.encoding = THREE.sRGBEncoding;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  const mat = new THREE.MeshStandardMaterial({ map: t, roughness: m.metal ? 0.35 : 0.8, metalness: m.metal ? 0.85 : 0 });
+  const mat = new THREE.MeshStandardMaterial({ map: t, roughness: m.metal ? 0.35 : m.gloss ? 0.32 : 0.8, metalness: m.metal ? 0.85 : 0 });
   cache.set(key, mat);
   return mat;
 }
